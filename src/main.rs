@@ -420,6 +420,62 @@ fn print_overview(out: &mut impl IoWrite, data: &[HourlyData], term_w: usize) ->
     Ok(())
 }
 
+// ─── Geocoding ────────────────────────────────────────────────────────────────
+
+fn geocode_city(name: &str) -> anyhow::Result<(f64, f64, String, String)> {
+    #[derive(Deserialize)]
+    struct GeoResult { name: String, country: String, latitude: f64, longitude: f64 }
+    #[derive(Deserialize)]
+    struct GeoResponse { results: Option<Vec<GeoResult>> }
+    let client = reqwest::blocking::Client::new();
+    let resp: GeoResponse = client
+        .get("https://geocoding-api.open-meteo.com/v1/search")
+        .query(&[("name", name), ("count", "1"), ("format", "json")])
+        .send()?.json()?;
+    let r = resp.results.and_then(|v| v.into_iter().next())
+        .ok_or_else(|| anyhow::anyhow!("City '{}' not found", name))?;
+    Ok((r.latitude, r.longitude, r.name, r.country))
+}
+
+fn reverse_geocode(lat: f64, lng: f64) -> anyhow::Result<(String, String)> {
+    #[derive(Deserialize)]
+    struct Addr {
+        city: Option<String>,
+        town: Option<String>,
+        village: Option<String>,
+        country: Option<String>,
+    }
+    #[derive(Deserialize)]
+    struct NomResp { address: Addr }
+    let lat_s = lat.to_string();
+    let lng_s = lng.to_string();
+    let client = reqwest::blocking::Client::new();
+    let resp: NomResp = client
+        .get("https://nominatim.openstreetmap.org/reverse")
+        .query(&[("lat", lat_s.as_str()), ("lon", lng_s.as_str()), ("format", "json")])
+        .header("User-Agent", "pogoda/0.1")
+        .send()?.json()?;
+    let city = resp.address.city
+        .or(resp.address.town)
+        .or(resp.address.village)
+        .unwrap_or_else(|| format!("{:.4},{:.4}", lat, lng));
+    let country = resp.address.country.unwrap_or_default();
+    Ok((city, country))
+}
+
+fn parse_days(s: Option<&String>) -> u32 {
+    let Some(s) = s else { return 7 };
+    let d: u32 = s.parse().unwrap_or_else(|_| {
+        eprintln!("Error: '{}' is not a valid number of days.", s);
+        std::process::exit(1);
+    });
+    if d < 1 || d > 16 {
+        eprintln!("Error: days must be between 1 and 16.");
+        std::process::exit(1);
+    }
+    d
+}
+
 // ─── ANSI output ─────────────────────────────────────────────────────────────
 
 fn emit_span(out: &mut impl IoWrite, span: &Span) -> io::Result<()> {
@@ -443,33 +499,71 @@ fn emit_span(out: &mut impl IoWrite, span: &Span) -> io::Result<()> {
 
 fn print_usage() {
     eprintln!("Pogoda — hourly weather forecast\n");
-    eprintln!("Usage: pogoda <latitude> <longitude> [days]\n");
-    eprintln!("  latitude   Decimal latitude   (e.g. 52.52 for Berlin)");
-    eprintln!("  longitude  Decimal longitude  (e.g. 13.41 for Berlin)");
-    eprintln!("  days       Forecast days 1–16 (default: 7)\n");
+    eprintln!("Usage:");
+    eprintln!("  pogoda <latitude> <longitude> [days]");
+    eprintln!("  pogoda <lat,lng> [days]");
+    eprintln!("  pogoda <city> [days]\n");
+    eprintln!("  days  Forecast days 1–16 (default: 7)\n");
     eprintln!("Examples:");
     eprintln!("  pogoda 52.52 13.41");
-    eprintln!("  pogoda 48.85 2.35 14     # Paris, 14 days");
-    eprintln!("  pogoda 40.71 -74.01 3    # New York, 3 days");
+    eprintln!("  pogoda 51.10,17.00 14");
+    eprintln!("  pogoda Wrocław");
+    eprintln!("  pogoda Berlin 10");
+    eprintln!("  pogoda New York 7");
 }
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() < 3 {
+    if args.len() < 2 {
         print_usage();
         std::process::exit(1);
     }
-    let lat: f64 = args[1].parse().unwrap_or_else(|_| { print_usage(); std::process::exit(1); });
-    let lng: f64 = args[2].parse().unwrap_or_else(|_| { print_usage(); std::process::exit(1); });
-    let days: u32 = if args.len() >= 4 {
-        let d: u32 = args[3].parse().unwrap_or_else(|_| { print_usage(); std::process::exit(1); });
-        if d < 1 || d > 16 {
-            eprintln!("Error: days must be between 1 and 16.");
-            std::process::exit(1);
+
+    // Parse location and days from arguments.
+    // Supported forms: "<lat> <lng> [days]" | "<lat,lng> [days]" | "<city...> [days]"
+    let (lat, lng, days, location) = {
+        let first = &args[1];
+        if let Some(comma_pos) = first.find(',') {
+            // "lat,lng" comma format
+            let lat: f64 = first[..comma_pos].parse().unwrap_or_else(|_| {
+                eprintln!("Error: invalid latitude in '{}'.", first); std::process::exit(1);
+            });
+            let lng: f64 = first[comma_pos+1..].parse().unwrap_or_else(|_| {
+                eprintln!("Error: invalid longitude in '{}'.", first); std::process::exit(1);
+            });
+            let days = parse_days(args.get(2));
+            let loc = reverse_geocode(lat, lng).ok();
+            (lat, lng, days, loc)
+        } else if let Ok(lat) = first.parse::<f64>() {
+            // "<lat> <lng>" numeric format
+            if args.len() < 3 { print_usage(); std::process::exit(1); }
+            let lng: f64 = args[2].parse().unwrap_or_else(|_| {
+                eprintln!("Error: invalid longitude '{}'.", args[2]); std::process::exit(1);
+            });
+            let days = parse_days(args.get(3));
+            let loc = reverse_geocode(lat, lng).ok();
+            (lat, lng, days, loc)
+        } else {
+            // City name — optional last arg is days if it parses as a number
+            let (city_parts, days) = if args.len() > 2 {
+                if let Ok(d) = args.last().unwrap().parse::<u32>() {
+                    if d < 1 || d > 16 {
+                        eprintln!("Error: days must be between 1 and 16.");
+                        std::process::exit(1);
+                    }
+                    (&args[1..args.len()-1], d)
+                } else {
+                    (&args[1..], 7u32)
+                }
+            } else {
+                (&args[1..], 7u32)
+            };
+            let city_name = city_parts.join(" ");
+            match geocode_city(&city_name) {
+                Ok((lat, lng, city, country)) => (lat, lng, days, Some((city, country))),
+                Err(e) => { eprintln!("Error: {}", e); std::process::exit(1); }
+            }
         }
-        d
-    } else {
-        7
     };
 
     let stdout = io::stdout();
@@ -477,15 +571,24 @@ fn main() -> anyhow::Result<()> {
 
     let term_w = crossterm::terminal::size().map(|(w, _)| w as usize).unwrap_or(120);
 
-    eprintln!("Fetching weather data...");
     let (api_url, data) = fetch_weather(lat, lng, days)?;
 
     let indigo = match palette(1.0) { Color::Rgb(r, g, b) => (r, g, b), _ => (90, 0, 170) };
+    writeln!(out)?;
     print_banner(&mut out, indigo)?;
 
     let forecast_date = data.first().map(|h| h.time.date()).unwrap_or_default();
-    writeln!(out, "Here is a detailed forecast for {lat}, {lng} done on {}.\n",
-        forecast_date.format("%B %d, %Y"))?;
+    let lat_str = if lat >= 0.0 { format!("{:.2}°N", lat) } else { format!("{:.2}°S", lat.abs()) };
+    let lng_str = if lng >= 0.0 { format!("{:.2}°E", lng) } else { format!("{:.2}°W", lng.abs()) };
+    let days_str = if days == 1 { "1 day".to_string() } else { format!("{} days", days) };
+    let date_str = format!("{} {}, {}", forecast_date.format("%B"), forecast_date.day(), forecast_date.year());
+    let loc_prefix = match &location {
+        Some((city, country)) if !country.is_empty() => format!("{}, {}  ·  ", city, country),
+        Some((city, _)) => format!("{}  ·  ", city),
+        None => String::new(),
+    };
+    writeln!(out, "Location: {}{}, {}  ·  {}  ·  {}\n",
+        loc_prefix, lat_str, lng_str, days_str, date_str)?;
 
     print_overview(&mut out, &data, term_w)?;
 
