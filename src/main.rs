@@ -261,6 +261,165 @@ fn print_banner(out: &mut impl IoWrite, shadow_rgb: (u8, u8, u8)) -> io::Result<
     Ok(())
 }
 
+// ─── Overview area charts ────────────────────────────────────────────────────
+
+fn write_colored(out: &mut impl IoWrite, ch: &str, color: Color) -> io::Result<()> {
+    match color {
+        Color::Rgb(r, g, b) => write!(out, "\x1b[38;2;{r};{g};{b}m{ch}\x1b[0m"),
+        Color::White        => write!(out, "\x1b[1;37m{ch}\x1b[0m"),
+        Color::DarkGray     => write!(out, "\x1b[90m{ch}\x1b[0m"),
+        Color::Cyan         => write!(out, "\x1b[36m{ch}\x1b[0m"),
+        _                   => write!(out, "{ch}"),
+    }
+}
+
+// Filled area chart (block chars). secondary = optional (values, s_min, s_max) overlay.
+fn print_one_chart(
+    out: &mut impl IoWrite,
+    title: &str,
+    primary: &[f64],
+    secondary: Option<(&[f64], f64, f64)>,
+    p_min: f64, p_max: f64,
+    chart_h: usize,
+    label_w: usize,
+    chart_w: usize,
+    term_w: usize,
+    fmt: &dyn Fn(f64) -> String,
+    p_color: &dyn Fn(f64) -> Color,
+    s_color: Color,
+) -> io::Result<()> {
+    const BLOCKS: &[&str] = &[" ", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
+    let total_sub = (chart_h * 8) as f64;
+    let p_range = (p_max - p_min).max(0.001);
+
+    // Header line
+    let hdr = format!("─ {} ", title);
+    let pad = term_w.saturating_sub(hdr.chars().count());
+    write!(out, "\x1b[90m{}{}\x1b[0m\n", hdr, "─".repeat(pad))?;
+
+    for r in 0..chart_h {
+        let label = if r == 0 { fmt(p_max) } else if r == chart_h - 1 { fmt(p_min) } else { String::new() };
+        write!(out, "\x1b[90m{:>label_w$}│\x1b[0m", label)?;
+
+        let row_bottom = (chart_h - 1 - r) * 8;
+        let row_top    = (chart_h - r) * 8;
+
+        for c in 0..chart_w {
+            let n = primary.len().max(1);
+            let idx = (c * n / chart_w).min(n - 1);
+
+            let p_val = primary[idx];
+            let p_sub = (((p_val - p_min) / p_range).clamp(0.0, 1.0) * total_sub).round() as usize;
+            let p_frac = p_sub.saturating_sub(row_bottom).min(8);
+            let p_ch = if p_sub >= row_top { "█" } else { BLOCKS[p_frac] };
+
+            let sec_in_row = secondary.and_then(|(sv, s_min, s_max)| {
+                let s_val = sv[idx];
+                let s_range = (s_max - s_min).max(0.001);
+                let s_sub = (((s_val - s_min) / s_range).clamp(0.0, 1.0) * total_sub).round() as usize;
+                let s_frac = s_sub.saturating_sub(row_bottom).min(8);
+                if s_sub > row_bottom && s_sub <= row_top { Some(s_frac) } else { None }
+            });
+
+            if let Some(s_frac) = sec_in_row {
+                write_colored(out, BLOCKS[s_frac], s_color)?;
+            } else if p_ch != " " {
+                write_colored(out, p_ch, p_color(p_val))?;
+            } else {
+                write!(out, " ")?;
+            }
+        }
+        writeln!(out)?;
+    }
+    Ok(())
+}
+
+fn print_overview(out: &mut impl IoWrite, data: &[HourlyData], term_w: usize) -> io::Result<()> {
+    if data.is_empty() { return Ok(()); }
+
+    const CHART_H: usize = 4;
+    let label_w: usize = 8;
+    let chart_w = term_w.saturating_sub(label_w + 1);
+    let n = data.len();
+
+    let temps:  Vec<f64> = data.iter().map(|h| h.temp).collect();
+    let feels:  Vec<f64> = data.iter().map(|h| h.apparent_temp).collect();
+    let clouds: Vec<f64> = data.iter().map(|h| h.cloud).collect();
+    let rain_p: Vec<f64> = data.iter().map(|h| h.precip_prob).collect();
+    let rain_m: Vec<f64> = data.iter().map(|h| h.precip).collect();
+    let winds:  Vec<f64> = data.iter().map(|h| h.wind_speed).collect();
+    let gusts:  Vec<f64> = data.iter().map(|h| h.wind_gust).collect();
+    let press:  Vec<f64> = data.iter().map(|h| h.pressure).collect();
+    let humid:  Vec<f64> = data.iter().map(|h| h.humidity).collect();
+
+    let temp_min  = temps.iter().chain(feels.iter()).cloned().fold(f64::INFINITY, f64::min) - 1.0;
+    let temp_max  = temps.iter().chain(feels.iter()).cloned().fold(f64::NEG_INFINITY, f64::max) + 1.0;
+    let press_min = press.iter().cloned().fold(f64::INFINITY, f64::min) - 1.0;
+    let press_max = press.iter().cloned().fold(f64::NEG_INFINITY, f64::max) + 1.0;
+    let rain_max  = rain_m.iter().cloned().fold(0.0_f64, f64::max).max(0.1);
+    let wind_max  = gusts.iter().chain(winds.iter()).cloned().fold(0.0_f64, f64::max) + 1.0;
+
+    print_one_chart(out, "TEMP °C",
+        &temps, None, temp_min, temp_max,
+        CHART_H, label_w, chart_w, term_w,
+        &|v| format!("{:.0}°C", v), &temp_color, Color::White)?;
+
+    print_one_chart(out, "FEEL °C",
+        &feels, None, temp_min, temp_max,
+        CHART_H, label_w, chart_w, term_w,
+        &|v| format!("{:.0}°C", v), &temp_color, Color::White)?;
+
+    print_one_chart(out, "CLOUD %",
+        &clouds, None, 0.0, 100.0,
+        CHART_H, label_w, chart_w, term_w,
+        &|v| format!("{:.0}%", v), &|_| Color::DarkGray, Color::White)?;
+
+    print_one_chart(out, "RAIN %",
+        &rain_p, None, 0.0, 100.0,
+        CHART_H, label_w, chart_w, term_w,
+        &|v| format!("{:.0}%", v), &|v| palette(v / 100.0), Color::White)?;
+
+    print_one_chart(out, "RAIN mm",
+        &rain_m, None, 0.0, rain_max,
+        CHART_H, label_w, chart_w, term_w,
+        &|v| format!("{:.1}mm", v), &|v| palette((v / rain_max).clamp(0.0, 1.0)), Color::White)?;
+
+    print_one_chart(out, "WIND km/h",
+        &winds, None, 0.0, wind_max,
+        CHART_H, label_w, chart_w, term_w,
+        &|v| format!("{:.0}k/h", v), &wind_color, Color::White)?;
+
+    print_one_chart(out, "GUSTS km/h",
+        &gusts, None, 0.0, wind_max,
+        CHART_H, label_w, chart_w, term_w,
+        &|v| format!("{:.0}k/h", v), &wind_color, Color::White)?;
+
+    print_one_chart(out, "PRESSURE hPa",
+        &press, None, press_min, press_max,
+        CHART_H, label_w, chart_w, term_w,
+        &|v| format!("{:.0}hPa", v), &pressure_color, Color::White)?;
+
+    print_one_chart(out, "HUMIDITY %",
+        &humid, None, 0.0, 100.0,
+        CHART_H, label_w, chart_w, term_w,
+        &|v| format!("{:.0}%", v), &|v| palette(v / 100.0), Color::White)?;
+
+    // X-axis: date labels at day boundaries
+    write!(out, "\x1b[90m{:>label_w$}┴", "")?;
+    let mut x_chars: Vec<char> = vec!['─'; chart_w];
+    for (di, hd) in data.iter().enumerate() {
+        if hd.time.hour() == 0 {
+            let col = di * chart_w / n;
+            for (j, ch) in hd.time.format("%a %d").to_string().chars().enumerate() {
+                if col + j < chart_w { x_chars[col + j] = ch; }
+            }
+        }
+    }
+    writeln!(out, "{}\x1b[0m", x_chars.iter().collect::<String>())?;
+    writeln!(out)?;
+    Ok(())
+}
+
 // ─── ANSI output ─────────────────────────────────────────────────────────────
 
 fn emit_span(out: &mut impl IoWrite, span: &Span) -> io::Result<()> {
@@ -316,12 +475,19 @@ fn main() -> anyhow::Result<()> {
     let stdout = io::stdout();
     let mut out = stdout.lock();
 
-    // Indigo = palette(1.0) = oklch(0.62, 0.14, 280°)
-    let indigo = match palette(1.0) { Color::Rgb(r, g, b) => (r, g, b), _ => (90, 0, 170) };
-    print_banner(&mut out, indigo)?;
+    let term_w = crossterm::terminal::size().map(|(w, _)| w as usize).unwrap_or(120);
 
     eprintln!("Fetching weather data...");
     let (api_url, data) = fetch_weather(lat, lng, days)?;
+
+    let indigo = match palette(1.0) { Color::Rgb(r, g, b) => (r, g, b), _ => (90, 0, 170) };
+    print_banner(&mut out, indigo)?;
+
+    let forecast_date = data.first().map(|h| h.time.date()).unwrap_or_default();
+    writeln!(out, "Here is a detailed forecast for {lat}, {lng} done on {}.\n",
+        forecast_date.format("%B %d, %Y"))?;
+
+    print_overview(&mut out, &data, term_w)?;
 
     let mut dates: Vec<chrono::NaiveDate> = data.iter().map(|h| h.time.date()).collect();
     dates.dedup();
@@ -335,59 +501,62 @@ fn main() -> anyhow::Result<()> {
     let wind_max = data.iter().map(|h| h.wind_gust.max(h.wind_speed)).fold(0.0_f64, f64::max) + 2.0;
 
     // ── Column layout ────────────────────────────────────────────────────────
-    // Label widths = exact char count of the formatted string (no unit suffix in value):
-    //   temp/wind: "{:>5.1}/{:>5.1}" = 11 chars
-    //   pct:       "{:>3.0}"         =  3 chars
-    //   precip:    "{:>4.1}"         =  4 chars
-    //   press:     "{:>6.0}"         =  6 chars
-    let day_w:     usize = 18;
-    let hour_w:    usize = 6;
-    let temp_lw:   usize = 11;
-    let temp_bw:   usize = 9;
-    let pct_lw:    usize = 3;
-    let pct_bw:    usize = 10;
-    let precip_lw: usize = 4;
-    let precip_bw: usize = 8;
-    let wind_lw:   usize = 11;
-    let wind_bw:   usize = 9;
-    let press_lw:  usize = 6;
-    let press_bw:  usize = 8;
+    // Each chart column: (header, label_w, default_bar_w)
+    // label_w = exact char count of the value format string.
+    let day_w:  usize = 18;
+    let hour_w: usize = 6;
+    const COL_DEFS: &[(&str, usize, usize)] = &[
+        ("TEMP/FEEL °C", 11, 9),
+        ("CLOUD %",       3, 10),
+        ("RAIN %",        3, 10),
+        ("RAIN mm",       4,  8),
+        ("WIND km/h",    11,  9),
+        ("PRESSURE hPa",  6,  8),
+        ("HUMIDITY %",    3, 10),
+    ];
+    const MIN_BAR: usize = 3;
 
-    let temp_inner   = temp_lw   + 1 + temp_bw;
-    let pct_inner    = pct_lw    + 1 + pct_bw;
-    let precip_inner = precip_lw + 1 + precip_bw;
-    let wind_inner   = wind_lw   + 1 + wind_bw;
-    let press_inner  = press_lw  + 1 + press_bw;
+    // Drop rightmost columns until everything fits with MIN_BAR per bar
+    let mut n_cols = COL_DEFS.len();
+    loop {
+        let needed: usize = day_w + hour_w
+            + COL_DEFS[..n_cols].iter().map(|(_, lw, _)| 1 + lw + 1 + MIN_BAR).sum::<usize>();
+        if needed <= term_w || n_cols == 1 { break; }
+        n_cols -= 1;
+    }
 
-    let sep_w = day_w + hour_w
-        + 1 + temp_inner
-        + 1 + pct_inner
-        + 1 + pct_inner
-        + 1 + precip_inner
-        + 1 + wind_inner
-        + 1 + press_inner
-        + 1 + pct_inner;
+    // Distribute available bar space proportionally among active columns
+    let active = &COL_DEFS[..n_cols];
+    let fixed: usize = day_w + hour_w
+        + active.iter().map(|(_, lw, _)| 1 + lw + 1).sum::<usize>();
+    let available = term_w.saturating_sub(fixed);
+    let default_total: usize = active.iter().map(|(_, _, bw)| bw).sum();
+    let mut bar_ws: Vec<usize> = active.iter().map(|(_, _, bw)| {
+        ((bw * available) / default_total.max(1)).max(MIN_BAR)
+    }).collect();
+    // Give any leftover chars to the last bar so total == term_w
+    let used: usize = fixed + bar_ws.iter().sum::<usize>();
+    if used < term_w { bar_ws[n_cols - 1] += term_w - used; }
+
+    let sep_w: usize = fixed + bar_ws.iter().sum::<usize>();
 
     let hdr = Style::default().add_modifier(Modifier::BOLD);
     let dim = Style::default().fg(Color::DarkGray);
 
     let mut lines: Vec<Line> = Vec::new();
 
-    // Header titles span full column (label + sep + bar)
+    // Header: titles span the full column (label + sep + bar)
     let hdr_col = |lw: usize, bw: usize, title: &str| -> String {
         format!(" {:<width$}", title, width = lw + 1 + bw)
     };
-    lines.push(Line::from(vec![
-        Span::styled(format!("{:<day_w$}", "DAY SUMMARY"),  hdr),
+    let mut hdr_spans = vec![
+        Span::styled(format!("{:<day_w$}", "DAY SUMMARY"), hdr),
         Span::raw(format!("{:hour_w$}", "")),
-        Span::styled(hdr_col(temp_lw,   temp_bw,   "TEMP/FEEL °C"),  hdr),
-        Span::styled(hdr_col(pct_lw,    pct_bw,    "CLOUD %"),        hdr),
-        Span::styled(hdr_col(pct_lw,    pct_bw,    "RAIN %"),         hdr),
-        Span::styled(hdr_col(precip_lw, precip_bw, "RAIN mm"),        hdr),
-        Span::styled(hdr_col(wind_lw,   wind_bw,   "WIND km/h"),      hdr),
-        Span::styled(hdr_col(press_lw,  press_bw,  "PRESSURE hPa"),   hdr),
-        Span::styled(hdr_col(pct_lw,    pct_bw,    "HUMIDITY %"),     hdr),
-    ]));
+    ];
+    for (i, (title, lw, _)) in active.iter().enumerate() {
+        hdr_spans.push(Span::styled(hdr_col(*lw, bar_ws[i], title), hdr));
+    }
+    lines.push(Line::from(hdr_spans));
     lines.push(Line::from(Span::styled("─".repeat(sep_w), dim)));
 
     let mut day_summary_idx: usize;
@@ -426,48 +595,50 @@ fn main() -> anyhow::Result<()> {
 
         spans.push(Span::styled(format!("{:02}:00 ", hour), dim));
 
-        // ── Temperature ──────────────────────────────────────────────────────
-        let tc = temp_color(hd.temp);
-        let temp_label = Span::styled(format!("{:>5.1}/{:>5.1}", hd.temp, hd.apparent_temp), Style::default().fg(tc));
-        let temp_spans = temp_bar(hd.temp, hd.apparent_temp, temp_min, temp_max, temp_bw);
-
-        // ── Cloud cover ───────────────────────────────────────────────────────
-        let cc = cloud_color(hd.cloud);
-        let cloud_label = Span::styled(format!("{:>3.0}", hd.cloud), Style::default().fg(cc));
-        let cloud_spans = value_bar(hd.cloud, 0.0, 100.0, pct_bw, cc);
-
-        // ── Rain probability ──────────────────────────────────────────────────
-        let pc = palette(hd.precip_prob / 100.0);
-        let prob_label = Span::styled(format!("{:>3.0}", hd.precip_prob), Style::default().fg(pc));
-        let prob_spans = value_bar(hd.precip_prob, 0.0, 100.0, pct_bw, pc);
-
-        // ── Precipitation mm ──────────────────────────────────────────────────
-        let rc = palette((hd.precip / 10.0).clamp(0.0, 1.0));
-        let precip_label = Span::styled(format!("{:>4.1}", hd.precip), Style::default().fg(rc));
-        let precip_spans = value_bar(hd.precip, 0.0, 10.0, precip_bw, rc);
-
-        // ── Wind speed / gusts ────────────────────────────────────────────────
-        let wc = wind_color(hd.wind_speed);
-        let wind_label = Span::styled(format!("{:>5.1}/{:>5.1}", hd.wind_speed, hd.wind_gust), Style::default().fg(wc));
-        let wind_spans = wind_bar(hd.wind_speed, hd.wind_gust, 0.0, wind_max, wind_bw);
-
-        // ── Pressure ──────────────────────────────────────────────────────────
-        let prc = pressure_color(hd.pressure);
-        let press_label = Span::styled(format!("{:>6.0}", hd.pressure), Style::default().fg(prc));
-        let press_spans = value_bar(hd.pressure, pressure_min, pressure_max, press_bw, prc);
-
-        // ── Humidity ──────────────────────────────────────────────────────────
-        let hc = palette(hd.humidity / 100.0);
-        let humid_label = Span::styled(format!("{:>3.0}", hd.humidity), Style::default().fg(hc));
-        let humid_spans = value_bar(hd.humidity, 0.0, 100.0, pct_bw, hc);
-
-        spans.push(Span::raw(" ")); spans.push(temp_label);   spans.push(Span::raw(" ")); spans.extend(temp_spans);
-        spans.push(Span::raw(" ")); spans.push(cloud_label);  spans.push(Span::raw(" ")); spans.extend(cloud_spans);
-        spans.push(Span::raw(" ")); spans.push(prob_label);   spans.push(Span::raw(" ")); spans.extend(prob_spans);
-        spans.push(Span::raw(" ")); spans.push(precip_label); spans.push(Span::raw(" ")); spans.extend(precip_spans);
-        spans.push(Span::raw(" ")); spans.push(wind_label);   spans.push(Span::raw(" ")); spans.extend(wind_spans);
-        spans.push(Span::raw(" ")); spans.push(press_label);  spans.push(Span::raw(" ")); spans.extend(press_spans);
-        spans.push(Span::raw(" ")); spans.push(humid_label);  spans.push(Span::raw(" ")); spans.extend(humid_spans);
+        for (i, _) in active.iter().enumerate() {
+            let bw = bar_ws[i];
+            let (label, bar): (Span, Vec<Span>) = match i {
+                0 => { // TEMP/FEEL
+                    let c = temp_color(hd.temp);
+                    (Span::styled(format!("{:>5.1}/{:>5.1}", hd.temp, hd.apparent_temp), Style::default().fg(c)),
+                     temp_bar(hd.temp, hd.apparent_temp, temp_min, temp_max, bw))
+                }
+                1 => { // CLOUD
+                    let c = cloud_color(hd.cloud);
+                    (Span::styled(format!("{:>3.0}", hd.cloud), Style::default().fg(c)),
+                     value_bar(hd.cloud, 0.0, 100.0, bw, c))
+                }
+                2 => { // RAIN %
+                    let c = palette(hd.precip_prob / 100.0);
+                    (Span::styled(format!("{:>3.0}", hd.precip_prob), Style::default().fg(c)),
+                     value_bar(hd.precip_prob, 0.0, 100.0, bw, c))
+                }
+                3 => { // RAIN mm
+                    let c = palette((hd.precip / 10.0).clamp(0.0, 1.0));
+                    (Span::styled(format!("{:>4.1}", hd.precip), Style::default().fg(c)),
+                     value_bar(hd.precip, 0.0, 10.0, bw, c))
+                }
+                4 => { // WIND
+                    let c = wind_color(hd.wind_speed);
+                    (Span::styled(format!("{:>5.1}/{:>5.1}", hd.wind_speed, hd.wind_gust), Style::default().fg(c)),
+                     wind_bar(hd.wind_speed, hd.wind_gust, 0.0, wind_max, bw))
+                }
+                5 => { // PRESSURE
+                    let c = pressure_color(hd.pressure);
+                    (Span::styled(format!("{:>6.0}", hd.pressure), Style::default().fg(c)),
+                     value_bar(hd.pressure, pressure_min, pressure_max, bw, c))
+                }
+                _ => { // HUMIDITY
+                    let c = palette(hd.humidity / 100.0);
+                    (Span::styled(format!("{:>3.0}", hd.humidity), Style::default().fg(c)),
+                     value_bar(hd.humidity, 0.0, 100.0, bw, c))
+                }
+            };
+            spans.push(Span::raw(" "));
+            spans.push(label);
+            spans.push(Span::raw(" "));
+            spans.extend(bar);
+        }
 
         lines.push(Line::from(spans));
     }
