@@ -537,7 +537,7 @@ fn print_usage() {
     eprintln!("  --strange-units    American units: °F, mph, in, inHg");
     eprintln!("  --i-am-not-blue    Warm color palette: indigo → red → orange");
     eprintln!("  --i-am-blue        Cool color palette: cyan → blue → indigo");
-    eprintln!("  (Color palette is chosen randomly if neither flag is set)\n");
+    eprintln!("  (Cool blue palette is used by default)\n");
     eprintln!("Examples:");
     eprintln!("  pogoda 52.52 13.41");
     eprintln!("  pogoda 51.10,17.00 14");
@@ -573,24 +573,12 @@ fn col_title(i: usize, imperial: bool) -> &'static str {
 fn main() -> anyhow::Result<()> {
     let raw_args: Vec<String> = std::env::args().collect();
     let imperial        = raw_args.iter().any(|a| a == "--strange-units");
-    let want_warm       = raw_args.iter().any(|a| a == "--i-am-not-blue");
-    let want_blue       = raw_args.iter().any(|a| a == "--i-am-blue");
+    let want_warm = raw_args.iter().any(|a| a == "--i-am-not-blue");
     let args: Vec<String> = raw_args.into_iter()
         .filter(|a| a != "--strange-units" && a != "--i-am-not-blue" && a != "--i-am-blue")
         .collect();
 
-    let theme = if want_warm {
-        Theme::Warm
-    } else if want_blue {
-        Theme::Blue
-    } else {
-        // Random: use nanoseconds of current time for 50/50 selection
-        let ns = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.subsec_nanos())
-            .unwrap_or(0);
-        if ns % 2 == 0 { Theme::Blue } else { Theme::Warm }
-    };
+    let theme = if want_warm { Theme::Warm } else { Theme::Blue };
     if args.len() < 2 {
         print_usage();
         std::process::exit(1);

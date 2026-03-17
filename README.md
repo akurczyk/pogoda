@@ -88,7 +88,7 @@ pogoda <city> [days]
 | `--i-am-not-blue` | Warm color palette (indigo → red → orange) |
 | `--i-am-blue` | Cool color palette (cyan → blue → indigo) |
 
-Modifiers can be combined freely. If neither `--i-am-not-blue` nor `--i-am-blue` is given, the palette is chosen randomly on each run.
+Modifiers can be combined freely. The cool blue palette is used by default; `--i-am-not-blue` switches to the warm palette.
 
 ---
 
