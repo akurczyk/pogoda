@@ -25,7 +25,7 @@ Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://ope
 
 ![Strange units forecast](strange-units.png)
 
-Data in °F, mph, inches of rain, and inHg pressure. All charts and the hourly table update accordingly. Shown here with `--i-am-not-blue` warm palette on a dark terminal background.
+Data in °F, mph, inches of rain, and inHg pressure. All charts and the hourly table update accordingly. Shown here with `--i-am-not-blue` warm color palette (indigo-red-orange) on a dark terminal background.
 
 </td>
 </tr>
