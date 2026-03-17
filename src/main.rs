@@ -32,7 +32,8 @@ fn print_usage() {
     eprintln!("  pogoda 51.10,17.00 14");
     eprintln!("  pogoda Wrocław");
     eprintln!("  pogoda Berlin 10 --strange-units");
-    eprintln!("  pogoda New York 7 --i-am-not-blue");
+    eprintln!("  pogoda New York 7 --i-am-not-blue\n");
+    eprintln!("https://github.com/akurczyk/pogoda");
 }
 
 fn main() -> anyhow::Result<()> {
