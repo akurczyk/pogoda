@@ -38,7 +38,7 @@ Data in °F, mph, inches of rain, and inHg pressure. All charts and the hourly t
 **Download a pre-built binary** (Linux/macOS):
 
 ```bash
-# Replace <version> and <target> with the appropriate values, e.g. v0.1.0 and x86_64-unknown-linux-musl
+# Replace <version> and <target> with the appropriate values, e.g. v0.1 and x86_64-unknown-linux-musl
 curl -L https://github.com/akurczyk/pogoda/releases/download/<version>/pogoda-<target> -o pogoda
 chmod +x pogoda
 sudo mv pogoda /usr/local/bin/
