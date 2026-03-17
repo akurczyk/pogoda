@@ -53,13 +53,13 @@ jobs:
 
       - name: Package binary
         run: |
-          cp target/${{ matrix.target }}/release/pogoda pogoda-${{ matrix.target }}
+          tar -czf pogoda-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release pogoda
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: pogoda-${{ matrix.target }}
-          path: pogoda-${{ matrix.target }}
+          path: pogoda-${{ matrix.target }}.tar.gz
 
   release:
     name: Create GitHub Release
