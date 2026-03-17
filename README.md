@@ -25,7 +25,7 @@ Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://ope
 
 ![Strange units forecast](strange-units.png)
 
-Same data in °F, mph, inches of rain, and inHg pressure. All charts and the hourly table update accordingly. Shown here with `--i-am-not-blue` warm palette.
+Data in °F, mph, inches of rain, and inHg pressure. All charts and the hourly table update accordingly. Shown here with `--i-am-not-blue` warm palette on a dark terminal background.
 
 </td>
 </tr>
@@ -35,14 +35,33 @@ Same data in °F, mph, inches of rain, and inHg pressure. All charts and the hou
 
 ## Installation
 
+**Download a pre-built binary** (Linux/macOS):
+
+```bash
+# Replace <version> and <target> with the appropriate values, e.g. v0.1.0 and x86_64-unknown-linux-musl
+curl -L https://github.com/akurczyk/pogoda/releases/download/<version>/pogoda-<target> -o pogoda
+chmod +x pogoda
+sudo mv pogoda /usr/local/bin/
+```
+
+Available targets:
+
+| Target | Platform |
+|--------|----------|
+| `x86_64-unknown-linux-musl` | Linux x86_64 |
+| `i686-unknown-linux-musl` | Linux x86 (32-bit) |
+| `aarch64-unknown-linux-musl` | Linux ARM64 |
+| `x86_64-apple-darwin` | macOS Intel |
+| `aarch64-apple-darwin` | macOS Apple Silicon |
+
+**Build from source:**
+
 ```bash
 git clone https://github.com/akurczyk/pogoda
 cd pogoda
 cargo build --release
 # binary at ./target/release/pogoda
 ```
-
-Requires Rust 2024 edition (rustup update stable).
 
 ---
 
@@ -76,8 +95,8 @@ Modifiers can be combined freely. The cool blue palette is used by default; `--i
 pogoda 52.52 13.41                          # Berlin, 7 days
 pogoda 51.10,17.00 14                       # Wrocław by coordinates, 14 days
 pogoda Wrocław                              # City name lookup
-pogoda New York 5 --strange-units          # American units
-pogoda Tokyo 10 --i-am-not-blue            # Warm color palette
+pogoda New York 5 --strange-units           # American units
+pogoda Tokyo 10 --i-am-not-blue             # Warm color palette
 ```
 
 ---
