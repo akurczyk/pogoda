@@ -16,7 +16,7 @@ Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://ope
 
 ![Standard forecast](no-params.png)
 
-7-day hourly view: temperature/feel, cloud cover, precipitation probability and amount, wind speed/gusts, pressure, and humidity. Color palette cycles between warm and cool randomly on each run.
+7-day hourly view: temperature/feel, cloud cover, precipitation probability and amount, wind speed/gusts, pressure, and humidity. Cool cyan–blue–indigo palette by default.
 
 </td>
 <td width="50%">
@@ -25,27 +25,7 @@ Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://ope
 
 ![Strange units forecast](strange-units.png)
 
-Same data in °F, mph, inches of rain, and inHg pressure. All charts and the hourly table update accordingly.
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-**Drone operator — `--i-drone-you`**
-
-![Drone forecast](i-drone-you.png)
-
-Wind at 10 m and 80 m altitude, wind direction, precipitation, visibility, and low cloud cover — prioritised for safe VLOS drone operations under EU UAS regulations.
-
-</td>
-<td width="50%">
-
-**Pilot forecast — `--i-gonna-fly`**
-
-![Pilot forecast](i-gonna-fly.png)
-
-Multi-level wind (10 m and 120 m), visibility, low/mid cloud cover, freezing level, CAPE, and QNH — designed for VFR light aircraft flight planning.
+Same data in °F, mph, inches of rain, and inHg pressure. All charts and the hourly table update accordingly. Shown here with `--i-am-not-blue` warm palette.
 
 </td>
 </tr>
@@ -83,10 +63,8 @@ pogoda <city> [days]
 | Flag | Description |
 |------|-------------|
 | `--strange-units` | American units: °F, mph, in, inHg |
-| `--i-drone-you` | Drone operator profile: wind at altitude, visibility, low cloud |
-| `--i-gonna-fly` | Pilot profile: multi-level wind, CAPE, icing level, cloud ceiling |
 | `--i-am-not-blue` | Warm color palette (indigo → red → orange) |
-| `--i-am-blue` | Cool color palette (cyan → blue → indigo) |
+| `--i-am-blue` | Cool color palette (cyan → blue → indigo, default) |
 
 Modifiers can be combined freely. The cool blue palette is used by default; `--i-am-not-blue` switches to the warm palette.
 
@@ -98,9 +76,8 @@ Modifiers can be combined freely. The cool blue palette is used by default; `--i
 pogoda 52.52 13.41                          # Berlin, 7 days
 pogoda 51.10,17.00 14                       # Wrocław by coordinates, 14 days
 pogoda Wrocław                              # City name lookup
-pogoda Paris 7 --i-gonna-fly               # Pilot view, Paris
 pogoda New York 5 --strange-units          # American units
-pogoda Tokyo 10 --i-drone-you --i-am-not-blue
+pogoda Tokyo 10 --i-am-not-blue            # Warm color palette
 ```
 
 ---
