@@ -87,7 +87,7 @@ fn push_wind_chart(
     data: &[DroneHourlyData],
     date: chrono::NaiveDate,
     left_pad: usize,
-    wind_max: f64,
+    _wind_max: f64,
     theme: Theme,
     dim_sty: Style,
 ) {
@@ -109,16 +109,12 @@ fn push_wind_chart(
         for hour in 0..24usize {
             if let Some(hd) = day.iter().find(|h| h.time.hour() as usize == hour) {
                 let (speed, dir) = get(hd);
-                if speed < 0.5 {
+                if speed == 0.0 {
                     spans.push(Span::raw(" "));
                 } else {
                     let arrow = wind_arrow(dir);
                     let c = wind_color(speed, theme);
-                    let sty = if speed > wind_max * 0.5 {
-                        Style::default().fg(c).add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default().fg(c)
-                    };
+                    let sty = Style::default().bg(c).fg(Color::White);
                     spans.push(Span::styled(arrow.to_string(), sty));
                 }
             } else {

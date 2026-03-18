@@ -20,9 +20,13 @@ pub fn emit_span(out: &mut impl IoWrite, span: &Span, mono: bool) -> io::Result<
     let has_style = style.fg.is_some() || !style.add_modifier.is_empty();
     if has_bold  { write!(out, "\x1b[1m")?; }
     if has_blink { write!(out, "\x1b[5m")?; }
+    match style.bg {
+        Some(Color::Rgb(r, g, b)) => write!(out, "\x1b[48;2;{r};{g};{b}m")?,
+        _ => {}
+    }
     match style.fg {
         Some(Color::Rgb(r, g, b)) => write!(out, "\x1b[38;2;{r};{g};{b}m")?,
-        Some(Color::White)        => write!(out, "\x1b[37m")?,
+        Some(Color::White)        => write!(out, "\x1b[97m")?,
         Some(Color::DarkGray)     => write!(out, "\x1b[90m")?,
         Some(Color::Cyan)         => write!(out, "\x1b[36m")?,
         Some(Color::Blue)         => write!(out, "\x1b[34m")?,
