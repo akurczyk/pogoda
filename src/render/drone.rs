@@ -6,7 +6,7 @@ use ratatui::{
 use std::io::{self, Write as IoWrite};
 
 use crate::colors::{palette, temp_color, wind_color};
-use crate::render::{bars::{temp_bar, value_bar}, emit_span};
+use crate::render::{bars::value_bar, emit_span};
 use crate::types::{DroneDaySummary, DroneHourlyData, Theme, Units};
 use crate::units::{c_to_f, kmh_to_mph, mm_to_in};
 use crate::weather::day_name;
@@ -38,8 +38,8 @@ fn rain_block_cell(prob: f64, mm: f64, max_mm: f64, width: usize, color: Color) 
 
 /// (header, label_w, default_bar_w)
 pub const DRONE_COL_DEFS: &[(&str, usize, usize)] = &[
-    ("TEMP/FEEL °C",  11, 7),
-    ("RAIN",           4, 8),
+    ("TEMP °C",        5, 7),
+    ("RAIN",           9, 8),
     ("W  10m",         6, 6),
     ("W  80m",         6, 6),
     ("W 120m",         6, 6),
@@ -50,8 +50,8 @@ pub const DRONE_COL_DEFS: &[(&str, usize, usize)] = &[
 
 pub fn drone_col_title(i: usize, units: Units) -> &'static str {
     match i {
-        0 => if units.use_fahrenheit() { "TEMP/FEEL °F" } else { "TEMP/FEEL °C" },
-        1 => if units.use_inches()     { "RAIN in"      } else { "RAIN mm"      },
+        0 => if units.use_fahrenheit() { "TEMP °F"      } else { "TEMP °C"      },
+        1 => if units.use_inches()     { "RAIN %→/in↑" } else { "RAIN %→/mm↑" },
         2 => if units.use_mph()        { "W  10m mph"   } else { "W  10m k/h"  },
         3 => if units.use_mph()        { "W  80m mph"   } else { "W  80m k/h"  },
         4 => if units.use_mph()        { "W 120m mph"   } else { "W 120m k/h"  },
@@ -62,7 +62,7 @@ pub fn drone_col_title(i: usize, units: Units) -> &'static str {
 
 pub fn drone_summary_parts(s: &DroneDaySummary, units: Units) -> Vec<(String, String)> {
     let t = |v: f64| if units.use_fahrenheit() { format!("{:>5.1}°F", c_to_f(v))      } else { format!("{:>5.1}°C", v)    };
-    let w = |v: f64| if units.use_mph()         { format!("{:>4.0}mph", kmh_to_mph(v)) } else { format!("{:>3.0}k/h", v)   };
+    let w = |v: f64| if units.use_mph()         { format!("{:>4.0}mph", kmh_to_mph(v)) } else { format!("{:>3.0}km/h", v)  };
     let r = |v: f64| if units.use_inches()       { format!("{:>5.2}in", mm_to_in(v))   } else { format!("{:>5.1}mm", v)    };
     vec![
         (format!("{}", s.date.format("%Y-%m-%d")), String::new()),
@@ -73,11 +73,11 @@ pub fn drone_summary_parts(s: &DroneDaySummary, units: Units) -> Vec<(String, St
         (format!("{:<10}", "Temp min:"),  t(s.min_temp)),
         (format!("{:<10}", "Rain prob:"), format!("{:>6.0}%", s.max_precip_prob)),
         (format!("{:<10}", "Rain sum:"),  r(s.total_precip)),
-        (format!("{:<10}", "W 10m:"),     format!(" {}", w(s.max_wind_10m))),
-        (format!("{:<10}", "W 80m:"),     format!(" {}", w(s.max_wind_80m))),
-        (format!("{:<10}", "W 120m:"),    format!(" {}", w(s.max_wind_120m))),
-        (format!("{:<10}", "W 180m:"),    format!(" {}", w(s.max_wind_180m))),
-        (format!("{:<10}", "Gusts:"),     format!(" {}", w(s.max_gust_10m))),
+        (format!("{:<10}", "W 10m:"),     format!("{}", w(s.max_wind_10m))),
+        (format!("{:<10}", "W 80m:"),     format!("{}", w(s.max_wind_80m))),
+        (format!("{:<10}", "W 120m:"),    format!("{}", w(s.max_wind_120m))),
+        (format!("{:<10}", "W 180m:"),    format!("{}", w(s.max_wind_180m))),
+        (format!("{:<10}", "Gusts:"),     format!("{}", w(s.max_gust_10m))),
         (format!("{:<10}", "UV max:"),    format!(" {:>6.1}", s.max_uv)),
     ]
 }
@@ -152,8 +152,8 @@ pub fn print_drone_table(
     use chrono::NaiveDate;
     if data.is_empty() { return Ok(()); }
 
-    let temp_min = data.iter().map(|h| h.apparent_temp.min(h.temp)).fold(f64::INFINITY, f64::min) - 2.0;
-    let temp_max = data.iter().map(|h| h.apparent_temp.max(h.temp)).fold(f64::NEG_INFINITY, f64::max) + 2.0;
+    let temp_min = data.iter().map(|h| h.temp).fold(f64::INFINITY, f64::min) - 2.0;
+    let temp_max = data.iter().map(|h| h.temp).fold(f64::NEG_INFINITY, f64::max) + 2.0;
     let wind_max = data.iter().map(|h|
         h.wind_speed_10m.max(h.wind_speed_80m).max(h.wind_speed_120m).max(h.wind_speed_180m)
     ).fold(0.0_f64, f64::max) + 2.0;
@@ -266,15 +266,11 @@ pub fn print_drone_table(
             spans.push(Span::raw(" "));
             match i {
                 0 => {
-                    let (dt, df) = if units.use_fahrenheit() {
-                        (c_to_f(hd.temp), c_to_f(hd.apparent_temp))
-                    } else {
-                        (hd.temp, hd.apparent_temp)
-                    };
+                    let dt = if units.use_fahrenheit() { c_to_f(hd.temp) } else { hd.temp };
                     let c = temp_color(hd.temp, theme);
-                    spans.push(Span::styled(format!("{:>5.1}/{:>5.1}", dt, df), Style::default().fg(c)));
+                    spans.push(Span::styled(format!("{:>5.1}", dt), Style::default().fg(c)));
                     spans.push(Span::raw(" "));
-                    spans.extend(temp_bar(hd.temp, hd.apparent_temp, temp_min, temp_max, bw, theme));
+                    spans.extend(value_bar(hd.temp, temp_min, temp_max, bw, c));
                 }
                 1 => {
                     let prob_t = hd.precip_prob / 100.0;
@@ -282,7 +278,12 @@ pub fn print_drone_table(
                     let c = palette((prob_t * 0.5 + mm_t * 0.5).clamp(0.0, 1.0), theme);
                     let mm_disp  = if units.use_inches() { mm_to_in(hd.precip) } else { hd.precip };
                     let max_disp = if units.use_inches() { mm_to_in(max_mm) }    else { max_mm };
-                    spans.push(Span::styled(format!("{:>3.0}%", hd.precip_prob), Style::default().fg(c)));
+                    let label = if units.use_inches() {
+                        format!("{:>3.0}%/{:>4.2}", hd.precip_prob, mm_disp)
+                    } else {
+                        format!("{:>3.0}%/{:>4.1}", hd.precip_prob, mm_disp)
+                    };
+                    spans.push(Span::styled(label, Style::default().fg(c)));
                     spans.push(Span::raw(" "));
                     spans.extend(rain_block_cell(hd.precip_prob, mm_disp, max_disp, bw, c));
                 }
