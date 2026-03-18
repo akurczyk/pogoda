@@ -42,7 +42,9 @@ fn print_usage() {
     eprintln!("  pogoda Wrocław");
     eprintln!("  pogoda Berlin 10 --strange-units");
     eprintln!("  pogoda London 7 --yes-sir");
-    eprintln!("  pogoda New York 7 --i-am-blue\n");
+    eprintln!("  pogoda New York 7 --i-am-blue");
+    eprintln!("  pogoda Wrocław 3-7              (days 3 through 7)");
+    eprintln!("  pogoda Berlin 5-10 --i-drone-you\n");
     eprintln!("https://github.com/akurczyk/pogoda  v{VERSION}");
 }
 

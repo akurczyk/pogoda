@@ -1,6 +1,6 @@
 use chrono::{NaiveDate, NaiveDateTime};
 
-pub const VERSION: &str = "0.2";
+pub const VERSION: &str = "0.3";
 
 /// Display theme — controls the OKLCH hue sweep used throughout.
 #[derive(Clone, Copy, PartialEq)]

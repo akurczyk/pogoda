@@ -1,6 +1,6 @@
 # Pogoda
 
-**Terminal Weather Forecast** — v0.2
+**Terminal Weather Forecast** — v0.3
 
 Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://open-meteo.com) and renders a rich, color-coded report directly in your terminal. It shows area charts for the full forecast period and an hourly table with bars, all scaled to your terminal width. A dedicated drone pilot mode (`--i-drone-you`) shows wind at multiple altitudes, rain intensity, and UV index.
 
@@ -68,7 +68,7 @@ brew install pogoda
 **Download a pre-built binary** (Linux/macOS):
 
 ```bash
-# Replace <version> and <target> with the appropriate values, e.g. v0.1.0 and x86_64-unknown-linux-musl
+# Replace <version> and <target> with the appropriate values, e.g. v0.3.0 and x86_64-unknown-linux-musl
 curl -L https://github.com/akurczyk/pogoda/releases/download/<version>/pogoda-<target>.tar.gz | tar -xz
 sudo mv pogoda /usr/local/bin/
 ```
@@ -102,7 +102,7 @@ pogoda <lat,lng> [days]
 pogoda <city> [days]
 ```
 
-`days` — forecast horizon, 1–16 (default: 7).
+`days` — forecast horizon, 1–16 (default: 7). Use `N-M` to show only days N through M (e.g. `3-7`).
 
 ---
 
@@ -145,12 +145,15 @@ CSV export (`--tabular-bells`) outputs all altitudes, directions, gusts, and UV 
 pogoda 52.52 13.41                              # Berlin, 7 days
 pogoda 51.10,17.00 14                           # Wrocław by coordinates, 14 days
 pogoda Wrocław                                  # City name lookup
+pogoda Wrocław 3-7                              # Days 3 through 7
+pogoda Berlin 5-10                              # Days 5 through 10
 pogoda New York 5 --strange-units               # American units
 pogoda London 7 --yes-sir                       # British units
 pogoda Tokyo 10 --i-am-blue                     # Cool color palette
 pogoda Berlin 7 --no-charts                     # Table only
 pogoda Paris 3 --tabular-bells                  # CSV output
 pogoda Wrocław 7 --i-drone-you                  # Drone pilot profile
+pogoda Berlin 5-10 --i-drone-you                # Drone profile, days 5–10
 pogoda Alps 3 --i-drone-you --strange-units     # Drone profile, American units
 pogoda Wrocław 7 --i-drone-you --tabular-bells  # Drone CSV export
 ```
