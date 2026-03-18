@@ -31,6 +31,23 @@ Data in °F, mph, inches of rain, and inHg pressure. All charts and the hourly t
 </tr>
 </table>
 
+<table>
+<tr>
+<td width="50%">
+
+**High-resolution charts — `--high-charts`**
+
+![High-resolution charts](high-charts.png)
+
+24-row charts with per-row scale labels for fine-grained reading of temperature, wind, pressure and other metrics.
+
+</td>
+<td width="50%">
+
+</td>
+</tr>
+</table>
+
 ---
 
 ## Installation
@@ -90,12 +107,13 @@ pogoda <city> [days]
 | `--strange-units` | American units: °F, mph, in, inHg |
 | `--yes-sir` | British units: °C, mph, mm, hPa |
 | `--i-am-blue` | Cool color palette (cyan → blue → indigo) |
+| `--color-me` | Full spectrum palette (cyan → blue → indigo → red → orange) |
 | `--i-cant-afford-cga` | Monochromatic output (no colors) |
-| `--high-charts` | Taller overview charts (12 rows instead of 4) |
+| `--high-charts` | Taller overview charts (24 rows instead of 4) |
 | `--no-charts` | Skip the overview charts |
 | `--no-table` | Skip the hourly table |
+| `--no-eyecandy` | Skip logo, location header and footer |
 | `--tabular-bells` | Output CSV data instead of charts/table |
-| `--i-cant-afford-cga` | Monochromatic output (no colors) |
 
 Modifiers can be combined freely. The warm indigo → red → orange palette is used by default; `--i-am-blue` switches to the cool cyan → blue → indigo palette.
 
