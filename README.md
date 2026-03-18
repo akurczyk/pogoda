@@ -10,7 +10,7 @@ Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://ope
 
 <table>
 <tr>
-<td width="50%">
+<td width="50%" valign="top">
 
 **Default forecast**
 
@@ -19,7 +19,7 @@ Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://ope
 7-day hourly view: temperature/feel, cloud cover, precipitation probability and amount, wind speed/gusts, pressure, and humidity. Cool cyan–blue–indigo palette enabled with `--i-am-blue` on light terminal background.
 
 </td>
-<td width="50%">
+<td width="50%" valign="top">
 
 **American units — `--strange-units`**
 
@@ -29,11 +29,8 @@ Data in °F, mph, inches of rain, and inHg pressure. All charts and the hourly t
 
 </td>
 </tr>
-</table>
-
-<table>
 <tr>
-<td width="50%">
+<td width="50%" valign="top">
 
 **Drone pilot profile — `--i-drone-you`**
 
@@ -42,7 +39,7 @@ Data in °F, mph, inches of rain, and inHg pressure. All charts and the hourly t
 Hourly wind speed and direction at 10 m, 80 m, 120 m, and 180 m altitude, plus 10 m gusts. Rain shown as a block chart where fill width encodes precipitation probability and block height encodes intensity (mm). UV index with a color-scaled bar. Per-day summary includes max wind at each altitude, max gusts, peak UV, and sunrise/sunset. Direction arrows are **bold** when wind direction differs across altitudes — a quick shear indicator for safe flying.
 
 </td>
-<td width="50%">
+<td width="50%" valign="top">
 
 **High-resolution charts — `--high-charts`**
 
@@ -142,16 +139,16 @@ CSV export (`--tabular-bells`) outputs all altitudes, directions, gusts, and UV 
 ## Examples
 
 ```bash
-pogoda 52.52 13.41                          # Berlin, 7 days
-pogoda 51.10,17.00 14                       # Wrocław by coordinates, 14 days
-pogoda Wrocław                              # City name lookup
-pogoda New York 5 --strange-units           # American units
-pogoda London 7 --yes-sir                   # British units
-pogoda Tokyo 10 --i-am-blue                 # Cool color palette
-pogoda Berlin 7 --no-charts                 # Table only
-pogoda Paris 3 --tabular-bells              # CSV output
-pogoda Wrocław 7 --i-drone-you              # Drone pilot profile
-pogoda Alps 3 --i-drone-you --strange-units # Drone profile, American units
+pogoda 52.52 13.41                              # Berlin, 7 days
+pogoda 51.10,17.00 14                           # Wrocław by coordinates, 14 days
+pogoda Wrocław                                  # City name lookup
+pogoda New York 5 --strange-units               # American units
+pogoda London 7 --yes-sir                       # British units
+pogoda Tokyo 10 --i-am-blue                     # Cool color palette
+pogoda Berlin 7 --no-charts                     # Table only
+pogoda Paris 3 --tabular-bells                  # CSV output
+pogoda Wrocław 7 --i-drone-you                  # Drone pilot profile
+pogoda Alps 3 --i-drone-you --strange-units     # Drone profile, American units
 pogoda Wrocław 7 --i-drone-you --tabular-bells  # Drone CSV export
 ```
 
