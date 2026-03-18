@@ -29,6 +29,9 @@ Data in °F, mph, inches of rain, and inHg pressure. All charts and the hourly t
 
 </td>
 </tr>
+</table>
+
+<table>
 <tr>
 <td width="50%" valign="top">
 
