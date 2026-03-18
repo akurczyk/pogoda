@@ -6,6 +6,15 @@ use crate::types::{HourlyData, Theme, Units};
 use crate::units::{c_to_f, hpa_to_inhg, kmh_to_mph, mm_to_in};
 use crate::render::write_colored;
 
+/// Place `label` at `col` only if every slot is still the background char.
+fn try_place(chars: &mut Vec<char>, col: usize, label: &str, bg: char) {
+    let lc: Vec<char> = label.chars().collect();
+    let end = (col + lc.len()).min(chars.len());
+    if col < chars.len() && chars[col..end].iter().all(|&c| c == bg) {
+        for (j, &ch) in lc[..end - col].iter().enumerate() { chars[col + j] = ch; }
+    }
+}
+
 pub fn print_one_chart(
     out: &mut impl IoWrite,
     title: &str,
@@ -19,6 +28,8 @@ pub fn print_one_chart(
     fmt: &dyn Fn(f64) -> String,
     p_color: &dyn Fn(f64) -> Color,
     s_color: Color,
+    hour_ruler: &[char],
+    title_connector: char,
     mono: bool,
 ) -> io::Result<()> {
     const BLOCKS: &[&str] = &[" ", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
@@ -28,9 +39,16 @@ pub fn print_one_chart(
     let dim   = if mono { "" } else { "\x1b[90m" };
     let reset = if mono { "" } else { "\x1b[0m" };
 
-    let hdr = format!("─ {} ", title);
-    let pad = term_w.saturating_sub(hdr.chars().count());
-    write!(out, "{dim}{}{}{reset}\n", hdr, "─".repeat(pad))?;
+    // Title — centered, with connector at label_w
+    let title_inner = format!(" {} ", title);
+    let total = term_w.saturating_sub(title_inner.chars().count());
+    let left  = total / 2;
+    let mut title_line: Vec<char> = vec!['─'; term_w];
+    for (j, ch) in title_inner.chars().enumerate() {
+        if left + j < term_w { title_line[left + j] = ch; }
+    }
+    if label_w < term_w { title_line[label_w] = title_connector; }
+    write!(out, "{dim}{}{reset}\n", title_line.iter().collect::<String>())?;
 
     for r in 0..chart_h {
         let t = (chart_h - 1 - r) as f64 / (chart_h - 1).max(1) as f64;
@@ -67,6 +85,11 @@ pub fn print_one_chart(
         }
         writeln!(out)?;
     }
+
+    // Hour ruler at the bottom of the chart
+    write!(out, "{dim}{}├", " ".repeat(label_w))?;
+    writeln!(out, "{}{reset}", hour_ruler.iter().collect::<String>())?;
+
     Ok(())
 }
 
@@ -100,65 +123,81 @@ pub fn print_overview(out: &mut impl IoWrite, data: &[HourlyData], term_w: usize
     let rf = |v: f64| if units.use_inches()       { format!("{:.2}in", mm_to_in(v))   } else { format!("{:.1}mm", v)    };
     let pf = |v: f64| if units.use_inhg()         { format!("{:.2}in", hpa_to_inhg(v))} else { format!("{:.1}hPa", v)   };
 
+    // Build the hour ruler once — reused in every chart header and the bottom axis.
+    let mut hour_ruler: Vec<char> = vec!['─'; chart_w];
+    let cols_per_hour = chart_w as f64 / n as f64;
+    for &iv in &[1u32, 2, 3, 4, 6, 8, 12] {
+        if cols_per_hour * iv as f64 >= 3.0 {
+            for (di, hd) in data.iter().enumerate() {
+                let h = hd.time.hour();
+                if h != 0 && h % iv == 0 {
+                    let col = di * chart_w / n;
+                    try_place(&mut hour_ruler, col, &format!("{:02}", h), '─');
+                }
+            }
+            break;
+        }
+    }
+
+    let r = &hour_ruler;
     print_one_chart(out, if units.use_fahrenheit() { "TEMP °F" } else { "TEMP °C" },
         &temps, None, temp_min, temp_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| tf(v), &|v| temp_color(v, theme), Color::White, mono)?;
+        &|v| tf(v), &|v| temp_color(v, theme), Color::White, r, '┬', mono)?;
 
     print_one_chart(out, if units.use_fahrenheit() { "FEEL °F" } else { "FEEL °C" },
         &feels, None, temp_min, temp_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| tf(v), &|v| temp_color(v, theme), Color::White, mono)?;
+        &|v| tf(v), &|v| temp_color(v, theme), Color::White, r, '┼', mono)?;
 
     print_one_chart(out, "CLOUD %",
         &clouds, None, 0.0, 100.0,
         chart_h, label_w, chart_w, term_w,
-        &|v| format!("{:.0}%", v), &|_| Color::DarkGray, Color::White, mono)?;
+        &|v| format!("{:.0}%", v), &|_| Color::DarkGray, Color::White, r, '┼', mono)?;
 
     print_one_chart(out, "RAIN %",
         &rain_p, None, 0.0, 100.0,
         chart_h, label_w, chart_w, term_w,
-        &|v| format!("{:.0}%", v), &|v| palette(v / 100.0, theme), Color::White, mono)?;
+        &|v| format!("{:.0}%", v), &|v| palette(v / 100.0, theme), Color::White, r, '┼', mono)?;
 
     print_one_chart(out, if units.use_inches() { "RAIN in" } else { "RAIN mm" },
         &rain_m, None, 0.0, rain_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| rf(v), &|v| palette((v / rain_max).clamp(0.0, 1.0), theme), Color::White, mono)?;
+        &|v| rf(v), &|v| palette((v / rain_max).clamp(0.0, 1.0), theme), Color::White, r, '┼', mono)?;
 
     print_one_chart(out, if units.use_mph() { "WIND mph" } else { "WIND km/h" },
         &winds, None, 0.0, wind_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| wf(v), &|v| wind_color(v, theme), Color::White, mono)?;
+        &|v| wf(v), &|v| wind_color(v, theme), Color::White, r, '┼', mono)?;
 
     print_one_chart(out, if units.use_mph() { "GUSTS mph" } else { "GUSTS km/h" },
         &gusts, None, 0.0, wind_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| wf(v), &|v| wind_color(v, theme), Color::White, mono)?;
+        &|v| wf(v), &|v| wind_color(v, theme), Color::White, r, '┼', mono)?;
 
     print_one_chart(out, if units.use_inhg() { "PRES inHg" } else { "PRESSURE hPa" },
         &press, None, press_min, press_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| pf(v), &|v| pressure_color(v, theme), Color::White, mono)?;
+        &|v| pf(v), &|v| pressure_color(v, theme), Color::White, r, '┼', mono)?;
 
     print_one_chart(out, "HUMIDITY %",
         &humid, None, 0.0, 100.0,
         chart_h, label_w, chart_w, term_w,
-        &|v| format!("{:.0}%", v), &|v| palette(v / 100.0, theme), Color::White, mono)?;
+        &|v| format!("{:.0}%", v), &|v| palette(v / 100.0, theme), Color::White, r, '┼', mono)?;
 
-    // X-axis: date labels at day boundaries
+    // Day names below the last chart's ruler, on a ─ background
     let dim   = if mono { "" } else { "\x1b[90m" };
     let reset = if mono { "" } else { "\x1b[0m" };
-    write!(out, "{dim}{:>label_w$}┴", "")?;
-    let mut x_chars: Vec<char> = vec!['─'; chart_w];
+
+    write!(out, "{dim}{}├", " ".repeat(label_w))?;
+    let mut day_chars: Vec<char> = vec!['─'; chart_w];
     for (di, hd) in data.iter().enumerate() {
         if hd.time.hour() == 0 {
             let col = di * chart_w / n;
-            for (j, ch) in hd.time.format("%a %d").to_string().chars().enumerate() {
-                if col + j < chart_w { x_chars[col + j] = ch; }
-            }
+            try_place(&mut day_chars, col, &hd.time.format("%a %d").to_string(), '─');
         }
     }
-    writeln!(out, "{}{reset}", x_chars.iter().collect::<String>())?;
+    writeln!(out, "{}{reset}", day_chars.iter().collect::<String>())?;
     writeln!(out)?;
     Ok(())
 }
