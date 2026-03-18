@@ -2,7 +2,7 @@
 
 **Terminal Weather Forecast** — v0.2
 
-Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://open-meteo.com) and renders a rich, color-coded report directly in your terminal. It shows area charts for the full forecast period and an hourly table with bars, all scaled to your terminal width.
+Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://open-meteo.com) and renders a rich, color-coded report directly in your terminal. It shows area charts for the full forecast period and an hourly table with bars, all scaled to your terminal width. A dedicated drone pilot mode (`--i-drone-you`) shows wind at multiple altitudes, rain intensity, and UV index.
 
 ---
 
@@ -35,14 +35,20 @@ Data in °F, mph, inches of rain, and inHg pressure. All charts and the hourly t
 <tr>
 <td width="50%">
 
+**Drone pilot profile — `--i-drone-you`**
+
+![Drone pilot profile](i-drone-you.png)
+
+Hourly wind speed and direction at 10 m, 80 m, 120 m, and 180 m altitude, plus 10 m gusts. Rain shown as a block chart where fill width encodes precipitation probability and block height encodes intensity (mm). UV index with a color-scaled bar. Per-day summary includes max wind at each altitude, max gusts, peak UV, and sunrise/sunset. Direction arrows are **bold** when wind direction differs across altitudes — a quick shear indicator for safe flying.
+
+</td>
+<td width="50%">
+
 **High-resolution charts — `--high-charts`**
 
 ![High-resolution charts](high-charts.png)
 
 24-row charts with per-row scale labels for fine-grained reading of temperature, wind, pressure and other metrics.
-
-</td>
-<td width="50%">
 
 </td>
 </tr>
@@ -104,6 +110,7 @@ pogoda <city> [days]
 
 | Flag | Description |
 |------|-------------|
+| `--i-drone-you` | Drone pilot profile: wind at 10/80/120/180 m, rain intensity, UV index |
 | `--strange-units` | American units: °F, mph, in, inHg |
 | `--yes-sir` | British units: °C, mph, mm, hPa |
 | `--i-am-blue` | Cool color palette (cyan → blue → indigo) |
@@ -116,6 +123,19 @@ pogoda <city> [days]
 | `--tabular-bells` | Output CSV data instead of charts/table |
 
 Modifiers can be combined freely. The warm indigo → red → orange palette is used by default; `--i-am-blue` switches to the cool cyan → blue → indigo palette.
+
+### Drone pilot profile (`--i-drone-you`)
+
+Designed for drone pilots and other low-altitude aviators. Replaces the standard forecast table with a layout optimized for flight planning:
+
+- **Wind at 4 altitudes** — 10 m (takeoff/landing), 80 m, 120 m, 180 m (cruise), each with speed bar and directional arrow
+- **Wind shear indicator** — direction arrows are shown **bold** when the wind direction differs across altitudes, warning of potentially turbulent conditions
+- **10 m gusts** — peak gust speed with color-scaled bar
+- **Rain block chart** — fill width encodes precipitation probability (%), block height character encodes intensity (mm): ▁▂▃▄▅▆▇█
+- **UV index** — color-scaled bar from safe (0) to extreme (11+)
+- **Per-day summary** — max wind at each altitude, max gusts, peak UV, rain probability and total, sunrise/sunset
+
+CSV export (`--tabular-bells`) outputs all altitudes, directions, gusts, and UV per hour. All unit modifiers (`--strange-units`, `--yes-sir`) and palette flags work in drone mode.
 
 ---
 
@@ -130,6 +150,9 @@ pogoda London 7 --yes-sir                   # British units
 pogoda Tokyo 10 --i-am-blue                 # Cool color palette
 pogoda Berlin 7 --no-charts                 # Table only
 pogoda Paris 3 --tabular-bells              # CSV output
+pogoda Wrocław 7 --i-drone-you              # Drone pilot profile
+pogoda Alps 3 --i-drone-you --strange-units # Drone profile, American units
+pogoda Wrocław 7 --i-drone-you --tabular-bells  # Drone CSV export
 ```
 
 ---

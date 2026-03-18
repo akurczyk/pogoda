@@ -50,6 +50,42 @@ pub struct HourlyData {
 }
 
 #[derive(Debug)]
+pub struct DroneHourlyData {
+    pub time: NaiveDateTime,
+    pub temp: f64,
+    pub apparent_temp: f64,
+    pub precip_prob: f64,
+    pub precip: f64,
+    pub wind_speed_10m: f64,
+    pub wind_speed_80m: f64,
+    pub wind_speed_120m: f64,
+    pub wind_speed_180m: f64,
+    pub wind_dir_10m: f64,
+    pub wind_dir_80m: f64,
+    pub wind_dir_120m: f64,
+    pub wind_dir_180m: f64,
+    pub wind_gust_10m: f64,
+    pub uv_index: f64,
+}
+
+#[derive(Debug)]
+pub struct DroneDaySummary {
+    pub date: NaiveDate,
+    pub sunrise: NaiveDateTime,
+    pub sunset: NaiveDateTime,
+    pub max_temp: f64,
+    pub min_temp: f64,
+    pub max_precip_prob: f64,
+    pub total_precip: f64,
+    pub max_wind_10m: f64,
+    pub max_wind_80m: f64,
+    pub max_wind_120m: f64,
+    pub max_wind_180m: f64,
+    pub max_gust_10m: f64,
+    pub max_uv: f64,
+}
+
+#[derive(Debug)]
 pub struct DaySummary {
     pub date: NaiveDate,
     pub sunrise: NaiveDateTime,

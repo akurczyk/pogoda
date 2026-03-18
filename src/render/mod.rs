@@ -1,6 +1,7 @@
 pub mod banner;
 pub mod bars;
 pub mod charts;
+pub mod drone;
 pub mod table;
 
 use ratatui::{style::{Color, Modifier}, text::Span};
@@ -15,8 +16,10 @@ pub fn emit_span(out: &mut impl IoWrite, span: &Span, mono: bool) -> io::Result<
         if has_bold { write!(out, "\x1b[0m")?; }
         return Ok(());
     }
+    let has_blink = style.add_modifier.contains(Modifier::SLOW_BLINK);
     let has_style = style.fg.is_some() || !style.add_modifier.is_empty();
-    if has_bold { write!(out, "\x1b[1m")?; }
+    if has_bold  { write!(out, "\x1b[1m")?; }
+    if has_blink { write!(out, "\x1b[5m")?; }
     match style.fg {
         Some(Color::Rgb(r, g, b)) => write!(out, "\x1b[38;2;{r};{g};{b}m")?,
         Some(Color::White)        => write!(out, "\x1b[37m")?,

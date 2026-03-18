@@ -41,15 +41,43 @@ pub fn reverse_geocode(lat: f64, lng: f64) -> anyhow::Result<(String, String)> {
     Ok((city, country))
 }
 
-pub fn parse_days(s: Option<&String>) -> u32 {
-    let Some(s) = s else { return 7 };
-    let d: u32 = s.parse().unwrap_or_else(|_| {
-        eprintln!("Error: '{}' is not a valid number of days.", s);
-        std::process::exit(1);
-    });
-    if d < 1 || d > 16 {
-        eprintln!("Error: days must be between 1 and 16.");
-        std::process::exit(1);
+/// Returns (from_day, to_day), both 1-based inclusive.
+/// Accepts "7" → (1,7) or "5-7" → (5,7).
+pub fn parse_days(s: Option<&String>) -> (u32, u32) {
+    let Some(s) = s else { return (1, 7) };
+    parse_days_str(s)
+}
+
+pub fn parse_days_str(s: &str) -> (u32, u32) {
+    if let Some((a, b)) = s.split_once('-') {
+        let from: u32 = a.parse().unwrap_or_else(|_| {
+            eprintln!("Error: invalid day range '{}'.", s); std::process::exit(1);
+        });
+        let to: u32 = b.parse().unwrap_or_else(|_| {
+            eprintln!("Error: invalid day range '{}'.", s); std::process::exit(1);
+        });
+        if from < 1 || to > 16 || from > to {
+            eprintln!("Error: day range must be N-M where 1 ≤ N ≤ M ≤ 16.");
+            std::process::exit(1);
+        }
+        (from, to)
+    } else {
+        let d: u32 = s.parse().unwrap_or_else(|_| {
+            eprintln!("Error: '{}' is not a valid number of days.", s);
+            std::process::exit(1);
+        });
+        if d < 1 || d > 16 {
+            eprintln!("Error: days must be between 1 and 16.");
+            std::process::exit(1);
+        }
+        (1, d)
     }
-    d
+}
+
+pub fn looks_like_days(s: &str) -> bool {
+    if s.parse::<u32>().is_ok() { return true; }
+    if let Some((a, b)) = s.split_once('-') {
+        return a.parse::<u32>().is_ok() && b.parse::<u32>().is_ok();
+    }
+    false
 }
