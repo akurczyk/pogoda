@@ -32,10 +32,18 @@ struct Hourly {
 }
 
 #[derive(Debug, Deserialize)]
+struct Daily {
+    time: Vec<String>,
+    sunrise: Vec<String>,
+    sunset: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 struct WeatherResponse {
     hourly_units: HourlyUnits,
     hourly: Hourly,
+    daily: Daily,
 }
 
 pub fn build_url(lat: f64, lng: f64, days: u32) -> String {
@@ -45,11 +53,12 @@ pub fn build_url(lat: f64, lng: f64, days: u32) -> String {
          &hourly=temperature_2m,precipitation,apparent_temperature,\
 precipitation_probability,pressure_msl,relative_humidity_2m,\
 cloud_cover,wind_speed_10m,wind_gusts_10m\
+         &daily=sunrise,sunset\
          &timezone=auto&forecast_days={days}"
     )
 }
 
-pub fn fetch_weather(lat: f64, lng: f64, days: u32) -> anyhow::Result<(String, Vec<HourlyData>)> {
+pub fn fetch_weather(lat: f64, lng: f64, days: u32) -> anyhow::Result<(String, Vec<HourlyData>, Vec<(NaiveDate, NaiveDateTime, NaiveDateTime)>)> {
     let url = build_url(lat, lng, days);
     let resp: WeatherResponse = reqwest::blocking::get(&url)?.json()?;
     let h = &resp.hourly;
@@ -68,15 +77,37 @@ pub fn fetch_weather(lat: f64, lng: f64, days: u32) -> anyhow::Result<(String, V
             wind_gust: h.wind_gusts_10m[i],
         }
     }).collect();
-    Ok((url, data))
+
+    let d = &resp.daily;
+    let solar: Vec<(NaiveDate, NaiveDateTime, NaiveDateTime)> = d.time.iter().enumerate().map(|(i, t)| {
+        let date = NaiveDate::parse_from_str(t, "%Y-%m-%d").unwrap();
+        let fallback_rise = date.and_hms_opt(6, 0, 0).unwrap();
+        let fallback_set  = date.and_hms_opt(20, 0, 0).unwrap();
+        let sunrise = NaiveDateTime::parse_from_str(&d.sunrise[i], "%Y-%m-%dT%H:%M")
+            .unwrap_or(fallback_rise);
+        let sunset  = NaiveDateTime::parse_from_str(&d.sunset[i],  "%Y-%m-%dT%H:%M")
+            .unwrap_or(fallback_set);
+        (date, sunrise, sunset)
+    }).collect();
+
+    Ok((url, data, solar))
 }
 
-pub fn day_summary(data: &[HourlyData], date: NaiveDate) -> DaySummary {
+pub fn day_summary(data: &[HourlyData], solar: &[(NaiveDate, NaiveDateTime, NaiveDateTime)], date: NaiveDate) -> DaySummary {
     let day: Vec<&HourlyData> = data.iter().filter(|h| h.time.date() == date).collect();
     let temps: Vec<f64> = day.iter().map(|h| h.temp).collect();
     let apparents: Vec<f64> = day.iter().map(|h| h.apparent_temp).collect();
+    let (sunrise, sunset) = solar.iter()
+        .find(|(d, _, _)| *d == date)
+        .map(|(_, rise, set)| (*rise, *set))
+        .unwrap_or_else(|| (
+            date.and_hms_opt(6, 0, 0).unwrap(),
+            date.and_hms_opt(20, 0, 0).unwrap(),
+        ));
     DaySummary {
         date,
+        sunrise,
+        sunset,
         max_temp: temps.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
         min_temp: temps.iter().cloned().fold(f64::INFINITY, f64::min),
         max_apparent: apparents.iter().cloned().fold(f64::NEG_INFINITY, f64::max),

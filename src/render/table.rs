@@ -7,7 +7,7 @@ use std::io::{self, Write as IoWrite};
 
 use crate::colors::{cloud_color, palette, pressure_color, temp_color, wind_color};
 use crate::render::{bars::{temp_bar, value_bar, wind_bar}, emit_span};
-use crate::types::{DaySummary, HourlyData, Theme};
+use crate::types::{DaySummary, HourlyData, Theme, Units};
 use crate::units::{c_to_f, hpa_to_inhg, kmh_to_mph, mm_to_in};
 use crate::weather::day_name;
 
@@ -22,29 +22,27 @@ pub const COL_DEFS: &[(&str, usize, usize)] = &[
     ("HUMIDITY %",    3, 10),
 ];
 
-pub fn col_title(i: usize, imperial: bool) -> &'static str {
-    if imperial {
-        match i {
-            0 => "TEMP/FEEL °F",
-            3 => "RAIN in",
-            4 => "WIND mph",
-            5 => "PRES inHg",
-            _ => COL_DEFS[i].0,
-        }
-    } else {
-        COL_DEFS[i].0
+pub fn col_title(i: usize, units: Units) -> &'static str {
+    match i {
+        0 => if units.use_fahrenheit() { "TEMP/FEEL °F" } else { "TEMP/FEEL °C" },
+        3 => if units.use_inches()     { "RAIN in"      } else { "RAIN mm"      },
+        4 => if units.use_mph()        { "WIND mph"     } else { "WIND km/h"    },
+        5 => if units.use_inhg()       { "PRES inHg"    } else { "PRESSURE hPa" },
+        _ => COL_DEFS[i].0,
     }
 }
 
 /// Per-day summary column (label 10 chars, value 7 chars).
-pub fn summary_parts(s: &DaySummary, imperial: bool) -> Vec<(String, String)> {
-    let t = |v: f64| if imperial { format!("{:>5.1}°F", c_to_f(v))       } else { format!("{:>5.1}°C", v)     };
-    let w = |v: f64| if imperial { format!("{:>4.0}mph", kmh_to_mph(v))   } else { format!("{:>3.0}km/h", v)   };
-    let r = |v: f64| if imperial { format!("{:>5.2}in", mm_to_in(v))      } else { format!("{:>5.1}mm", v)     };
-    let p = |v: f64| if imperial { format!("{:>5.2}in", hpa_to_inhg(v))   } else { format!("{:>4.0}hPa", v)    };
+pub fn summary_parts(s: &DaySummary, units: Units) -> Vec<(String, String)> {
+    let t = |v: f64| if units.use_fahrenheit() { format!("{:>5.1}°F", c_to_f(v))       } else { format!("{:>5.1}°C", v)     };
+    let w = |v: f64| if units.use_mph()         { format!("{:>4.0}mph", kmh_to_mph(v))   } else { format!("{:>3.0}km/h", v)   };
+    let r = |v: f64| if units.use_inches()       { format!("{:>5.2}in", mm_to_in(v))      } else { format!("{:>5.1}mm", v)     };
+    let p = |v: f64| if units.use_inhg()         { format!("{:>5.2}in", hpa_to_inhg(v))   } else { format!("{:>4.0}hPa", v)    };
     vec![
         (format!("{}", s.date.format("%Y-%m-%d")), String::new()),
         (format!("{}", day_name(s.date)), String::new()),
+        (format!("{:<10}", "Sunrise:"),   format!("{:>7}", s.sunrise.format("%H:%M"))),
+        (format!("{:<10}", "Sunset:"),    format!("{:>7}", s.sunset.format("%H:%M"))),
         (format!("{:<10}", "Temp max:"),  t(s.max_temp)),
         (format!("{:<10}", "Temp min:"),  t(s.min_temp)),
         (format!("{:<10}", "Feel max:"),  t(s.max_apparent)),
@@ -65,9 +63,11 @@ pub fn print_table(
     dates: &[chrono::NaiveDate],
     summaries: &[DaySummary],
     term_w: usize,
-    imperial: bool,
+    units: Units,
     theme: Theme,
+    mono: bool,
 ) -> io::Result<()> {
+    use chrono::NaiveDate;
     let temp_min = data.iter().map(|h| h.apparent_temp.min(h.temp)).fold(f64::INFINITY, f64::min) - 2.0;
     let temp_max = data.iter().map(|h| h.apparent_temp.max(h.temp)).fold(f64::NEG_INFINITY, f64::max) + 2.0;
     let pressure_min = data.iter().map(|h| h.pressure).fold(f64::INFINITY, f64::min) - 2.0;
@@ -110,10 +110,15 @@ pub fn print_table(
         Span::raw(format!("{:hour_w$}", "")),
     ];
     for (i, (_, lw, _)) in active.iter().enumerate() {
-        hdr_spans.push(Span::styled(hdr_col(*lw, bar_ws[i], col_title(i, imperial)), hdr));
+        hdr_spans.push(Span::styled(hdr_col(*lw, bar_ws[i], col_title(i, units)), hdr));
     }
     lines.push(Line::from(hdr_spans));
     lines.push(Line::from(Span::styled("─".repeat(sep_w), dim)));
+
+    let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()
+        .and_hms_opt(0, 0, 0).unwrap();
+    let mut current_sunrise = epoch;
+    let mut current_sunset  = epoch;
 
     let mut day_summary_idx: usize;
     let mut current_date: Option<chrono::NaiveDate> = None;
@@ -131,14 +136,16 @@ pub fn print_table(
             current_date = Some(date);
             day_row_count = 0;
             day_summary_idx = dates.iter().position(|d| *d == date).unwrap_or(0);
-            day_parts_cache = summary_parts(&summaries[day_summary_idx], imperial);
+            current_sunrise = summaries[day_summary_idx].sunrise;
+            current_sunset  = summaries[day_summary_idx].sunset;
+            day_parts_cache = summary_parts(&summaries[day_summary_idx], units);
         }
 
         let bold = Style::default().add_modifier(Modifier::BOLD);
         let mut spans: Vec<Span> = if day_row_count < day_parts_cache.len() {
             let (label, value) = &day_parts_cache[day_row_count];
             if day_row_count == 1 {
-                vec![Span::styled(format!("{:<day_w$}", label), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))]
+                vec![Span::styled(format!("{:<day_w$}", label), Style::default().fg(palette(0.0, theme)).add_modifier(Modifier::BOLD))]
             } else if value.is_empty() {
                 vec![Span::styled(format!("{:<day_w$}", label), bold)]
             } else {
@@ -149,13 +156,18 @@ pub fn print_table(
         };
         day_row_count += 1;
 
-        spans.push(Span::styled(format!("{:02}:00 ", hour), dim));
+        let h_style = if hd.time >= current_sunrise && hd.time < current_sunset {
+            Style::default().fg(palette(0.5, theme))
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+        spans.push(Span::styled(format!("{:02}:00 ", hour), h_style));
 
         for (i, _) in active.iter().enumerate() {
             let bw = bar_ws[i];
             let (label, bar): (Span, Vec<Span>) = match i {
                 0 => {
-                    let (dt, df) = if imperial {
+                    let (dt, df) = if units.use_fahrenheit() {
                         (c_to_f(hd.temp), c_to_f(hd.apparent_temp))
                     } else {
                         (hd.temp, hd.apparent_temp)
@@ -176,7 +188,7 @@ pub fn print_table(
                 }
                 3 => {
                     let c = palette((hd.precip / 10.0).clamp(0.0, 1.0), theme);
-                    let disp = if imperial {
+                    let disp = if units.use_inches() {
                         format!("{:>4.2}", mm_to_in(hd.precip))
                     } else {
                         format!("{:>4.1}", hd.precip)
@@ -185,7 +197,7 @@ pub fn print_table(
                      value_bar(hd.precip, 0.0, 10.0, bw, c))
                 }
                 4 => {
-                    let (ds, dg) = if imperial {
+                    let (ds, dg) = if units.use_mph() {
                         (kmh_to_mph(hd.wind_speed), kmh_to_mph(hd.wind_gust))
                     } else {
                         (hd.wind_speed, hd.wind_gust)
@@ -196,7 +208,7 @@ pub fn print_table(
                 }
                 5 => {
                     let c = pressure_color(hd.pressure, theme);
-                    let disp = if imperial {
+                    let disp = if units.use_inhg() {
                         format!("{:>6.2}", hpa_to_inhg(hd.pressure))
                     } else {
                         format!("{:>6.0}", hd.pressure)
@@ -222,7 +234,7 @@ pub fn print_table(
     writeln!(out)?;
     for line in &lines {
         for span in &line.spans {
-            emit_span(out, span)?;
+            emit_span(out, span, mono)?;
         }
         writeln!(out)?;
     }

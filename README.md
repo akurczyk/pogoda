@@ -1,6 +1,6 @@
 # Pogoda
 
-**Terminal Weather Forecast** — v0.1
+**Terminal Weather Forecast** — v0.2
 
 Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://open-meteo.com) and renders a rich, color-coded report directly in your terminal. It shows area charts for the full forecast period and an hourly table with bars, all scaled to your terminal width.
 
@@ -16,7 +16,7 @@ Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://ope
 
 ![Standard forecast](no-params.png)
 
-7-day hourly view: temperature/feel, cloud cover, precipitation probability and amount, wind speed/gusts, pressure, and humidity. Cool cyan–blue–indigo palette by default.
+7-day hourly view: temperature/feel, cloud cover, precipitation probability and amount, wind speed/gusts, pressure, and humidity. Cool cyan–blue–indigo palette enabled with `--i-am-blue` on light terminal background.
 
 </td>
 <td width="50%">
@@ -25,7 +25,7 @@ Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://ope
 
 ![Strange units forecast](strange-units.png)
 
-Data in °F, mph, inches of rain, and inHg pressure. All charts and the hourly table update accordingly. Shown here with `--i-am-not-blue` warm palette on a dark terminal background.
+Data in °F, mph, inches of rain, and inHg pressure. All charts and the hourly table update accordingly. Warm indigo → red → orange palette (default one) on a dark terminal background.
 
 </td>
 </tr>
@@ -88,10 +88,16 @@ pogoda <city> [days]
 | Flag | Description |
 |------|-------------|
 | `--strange-units` | American units: °F, mph, in, inHg |
-| `--i-am-not-blue` | Warm color palette (indigo → red → orange) |
-| `--i-am-blue` | Cool color palette (cyan → blue → indigo, default) |
+| `--yes-sir` | British units: °C, mph, mm, hPa |
+| `--i-am-blue` | Cool color palette (cyan → blue → indigo) |
+| `--i-cant-afford-cga` | Monochromatic output (no colors) |
+| `--high-charts` | Taller overview charts (12 rows instead of 4) |
+| `--no-charts` | Skip the overview charts |
+| `--no-table` | Skip the hourly table |
+| `--tabular-bells` | Output CSV data instead of charts/table |
+| `--i-cant-afford-cga` | Monochromatic output (no colors) |
 
-Modifiers can be combined freely. The cool blue palette is used by default; `--i-am-not-blue` switches to the warm palette.
+Modifiers can be combined freely. The warm indigo → red → orange palette is used by default; `--i-am-blue` switches to the cool cyan → blue → indigo palette.
 
 ---
 
@@ -102,7 +108,10 @@ pogoda 52.52 13.41                          # Berlin, 7 days
 pogoda 51.10,17.00 14                       # Wrocław by coordinates, 14 days
 pogoda Wrocław                              # City name lookup
 pogoda New York 5 --strange-units           # American units
-pogoda Tokyo 10 --i-am-not-blue             # Warm color palette
+pogoda London 7 --yes-sir                   # British units
+pogoda Tokyo 10 --i-am-blue                 # Cool color palette
+pogoda Berlin 7 --no-charts                 # Table only
+pogoda Paris 3 --tabular-bells              # CSV output
 ```
 
 ---

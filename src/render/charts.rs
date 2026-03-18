@@ -2,7 +2,7 @@ use ratatui::style::Color;
 use std::io::{self, Write as IoWrite};
 
 use crate::colors::{palette, pressure_color, temp_color, wind_color};
-use crate::types::{HourlyData, Theme};
+use crate::types::{HourlyData, Theme, Units};
 use crate::units::{c_to_f, hpa_to_inhg, kmh_to_mph, mm_to_in};
 use crate::render::write_colored;
 
@@ -19,18 +19,23 @@ pub fn print_one_chart(
     fmt: &dyn Fn(f64) -> String,
     p_color: &dyn Fn(f64) -> Color,
     s_color: Color,
+    mono: bool,
 ) -> io::Result<()> {
     const BLOCKS: &[&str] = &[" ", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
     let total_sub = (chart_h * 8) as f64;
     let p_range = (p_max - p_min).max(0.001);
 
+    let dim   = if mono { "" } else { "\x1b[90m" };
+    let reset = if mono { "" } else { "\x1b[0m" };
+
     let hdr = format!("─ {} ", title);
     let pad = term_w.saturating_sub(hdr.chars().count());
-    write!(out, "\x1b[90m{}{}\x1b[0m\n", hdr, "─".repeat(pad))?;
+    write!(out, "{dim}{}{}{reset}\n", hdr, "─".repeat(pad))?;
 
     for r in 0..chart_h {
-        let label = if r == 0 { fmt(p_max) } else if r == chart_h - 1 { fmt(p_min) } else { String::new() };
-        write!(out, "\x1b[90m{:>label_w$}│\x1b[0m", label)?;
+        let t = (chart_h - 1 - r) as f64 / (chart_h - 1).max(1) as f64;
+        let label = fmt(p_min + t * (p_max - p_min));
+        write!(out, "{dim}{:>label_w$}│{reset}", label)?;
 
         let row_bottom = (chart_h - 1 - r) * 8;
         let row_top    = (chart_h - r) * 8;
@@ -53,9 +58,9 @@ pub fn print_one_chart(
             });
 
             if let Some(s_frac) = sec_in_row {
-                write_colored(out, BLOCKS[s_frac], s_color)?;
+                write_colored(out, BLOCKS[s_frac], s_color, mono)?;
             } else if p_ch != " " {
-                write_colored(out, p_ch, p_color(p_val))?;
+                write_colored(out, p_ch, p_color(p_val), mono)?;
             } else {
                 write!(out, " ")?;
             }
@@ -65,12 +70,11 @@ pub fn print_one_chart(
     Ok(())
 }
 
-pub fn print_overview(out: &mut impl IoWrite, data: &[HourlyData], term_w: usize, imperial: bool, theme: Theme) -> io::Result<()> {
+pub fn print_overview(out: &mut impl IoWrite, data: &[HourlyData], term_w: usize, units: Units, theme: Theme, chart_h: usize, mono: bool) -> io::Result<()> {
     use chrono::Timelike;
     if data.is_empty() { return Ok(()); }
 
-    const CHART_H: usize = 4;
-    let label_w: usize = 8;
+    let label_w: usize = 10;
     let chart_w = term_w.saturating_sub(label_w + 1);
     let n = data.len();
 
@@ -91,58 +95,60 @@ pub fn print_overview(out: &mut impl IoWrite, data: &[HourlyData], term_w: usize
     let rain_max  = rain_m.iter().cloned().fold(0.0_f64, f64::max).max(0.1);
     let wind_max  = gusts.iter().chain(winds.iter()).cloned().fold(0.0_f64, f64::max) + 1.0;
 
-    let tf = |v: f64| if imperial { format!("{:.0}°F", c_to_f(v))      } else { format!("{:.0}°C", v)    };
-    let wf = |v: f64| if imperial { format!("{:.0}mph", kmh_to_mph(v)) } else { format!("{:.0}k/h", v)   };
-    let rf = |v: f64| if imperial { format!("{:.2}in", mm_to_in(v))    } else { format!("{:.1}mm", v)    };
-    let pf = |v: f64| if imperial { format!("{:.2}in", hpa_to_inhg(v)) } else { format!("{:.0}hPa", v)   };
+    let tf = |v: f64| if units.use_fahrenheit() { format!("{:.1}°F", c_to_f(v))      } else { format!("{:.1}°C", v)    };
+    let wf = |v: f64| if units.use_mph()         { format!("{:.1}mph", kmh_to_mph(v)) } else { format!("{:.1}k/h", v)   };
+    let rf = |v: f64| if units.use_inches()       { format!("{:.2}in", mm_to_in(v))   } else { format!("{:.1}mm", v)    };
+    let pf = |v: f64| if units.use_inhg()         { format!("{:.2}in", hpa_to_inhg(v))} else { format!("{:.1}hPa", v)   };
 
-    print_one_chart(out, if imperial { "TEMP °F" } else { "TEMP °C" },
+    print_one_chart(out, if units.use_fahrenheit() { "TEMP °F" } else { "TEMP °C" },
         &temps, None, temp_min, temp_max,
-        CHART_H, label_w, chart_w, term_w,
-        &|v| tf(v), &|v| temp_color(v, theme), Color::White)?;
+        chart_h, label_w, chart_w, term_w,
+        &|v| tf(v), &|v| temp_color(v, theme), Color::White, mono)?;
 
-    print_one_chart(out, if imperial { "FEEL °F" } else { "FEEL °C" },
+    print_one_chart(out, if units.use_fahrenheit() { "FEEL °F" } else { "FEEL °C" },
         &feels, None, temp_min, temp_max,
-        CHART_H, label_w, chart_w, term_w,
-        &|v| tf(v), &|v| temp_color(v, theme), Color::White)?;
+        chart_h, label_w, chart_w, term_w,
+        &|v| tf(v), &|v| temp_color(v, theme), Color::White, mono)?;
 
     print_one_chart(out, "CLOUD %",
         &clouds, None, 0.0, 100.0,
-        CHART_H, label_w, chart_w, term_w,
-        &|v| format!("{:.0}%", v), &|_| Color::DarkGray, Color::White)?;
+        chart_h, label_w, chart_w, term_w,
+        &|v| format!("{:.0}%", v), &|_| Color::DarkGray, Color::White, mono)?;
 
     print_one_chart(out, "RAIN %",
         &rain_p, None, 0.0, 100.0,
-        CHART_H, label_w, chart_w, term_w,
-        &|v| format!("{:.0}%", v), &|v| palette(v / 100.0, theme), Color::White)?;
+        chart_h, label_w, chart_w, term_w,
+        &|v| format!("{:.0}%", v), &|v| palette(v / 100.0, theme), Color::White, mono)?;
 
-    print_one_chart(out, if imperial { "RAIN in" } else { "RAIN mm" },
+    print_one_chart(out, if units.use_inches() { "RAIN in" } else { "RAIN mm" },
         &rain_m, None, 0.0, rain_max,
-        CHART_H, label_w, chart_w, term_w,
-        &|v| rf(v), &|v| palette((v / rain_max).clamp(0.0, 1.0), theme), Color::White)?;
+        chart_h, label_w, chart_w, term_w,
+        &|v| rf(v), &|v| palette((v / rain_max).clamp(0.0, 1.0), theme), Color::White, mono)?;
 
-    print_one_chart(out, if imperial { "WIND mph" } else { "WIND km/h" },
+    print_one_chart(out, if units.use_mph() { "WIND mph" } else { "WIND km/h" },
         &winds, None, 0.0, wind_max,
-        CHART_H, label_w, chart_w, term_w,
-        &|v| wf(v), &|v| wind_color(v, theme), Color::White)?;
+        chart_h, label_w, chart_w, term_w,
+        &|v| wf(v), &|v| wind_color(v, theme), Color::White, mono)?;
 
-    print_one_chart(out, if imperial { "GUSTS mph" } else { "GUSTS km/h" },
+    print_one_chart(out, if units.use_mph() { "GUSTS mph" } else { "GUSTS km/h" },
         &gusts, None, 0.0, wind_max,
-        CHART_H, label_w, chart_w, term_w,
-        &|v| wf(v), &|v| wind_color(v, theme), Color::White)?;
+        chart_h, label_w, chart_w, term_w,
+        &|v| wf(v), &|v| wind_color(v, theme), Color::White, mono)?;
 
-    print_one_chart(out, if imperial { "PRES inHg" } else { "PRESSURE hPa" },
+    print_one_chart(out, if units.use_inhg() { "PRES inHg" } else { "PRESSURE hPa" },
         &press, None, press_min, press_max,
-        CHART_H, label_w, chart_w, term_w,
-        &|v| pf(v), &|v| pressure_color(v, theme), Color::White)?;
+        chart_h, label_w, chart_w, term_w,
+        &|v| pf(v), &|v| pressure_color(v, theme), Color::White, mono)?;
 
     print_one_chart(out, "HUMIDITY %",
         &humid, None, 0.0, 100.0,
-        CHART_H, label_w, chart_w, term_w,
-        &|v| format!("{:.0}%", v), &|v| palette(v / 100.0, theme), Color::White)?;
+        chart_h, label_w, chart_w, term_w,
+        &|v| format!("{:.0}%", v), &|v| palette(v / 100.0, theme), Color::White, mono)?;
 
     // X-axis: date labels at day boundaries
-    write!(out, "\x1b[90m{:>label_w$}┴", "")?;
+    let dim   = if mono { "" } else { "\x1b[90m" };
+    let reset = if mono { "" } else { "\x1b[0m" };
+    write!(out, "{dim}{:>label_w$}┴", "")?;
     let mut x_chars: Vec<char> = vec!['─'; chart_w];
     for (di, hd) in data.iter().enumerate() {
         if hd.time.hour() == 0 {
@@ -152,7 +158,7 @@ pub fn print_overview(out: &mut impl IoWrite, data: &[HourlyData], term_w: usize
             }
         }
     }
-    writeln!(out, "{}\x1b[0m", x_chars.iter().collect::<String>())?;
+    writeln!(out, "{}{reset}", x_chars.iter().collect::<String>())?;
     writeln!(out)?;
     Ok(())
 }

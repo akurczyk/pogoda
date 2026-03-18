@@ -1,12 +1,28 @@
 use chrono::{NaiveDate, NaiveDateTime};
 
-pub const VERSION: &str = "0.1";
+pub const VERSION: &str = "0.2";
 
 /// Display theme — controls the OKLCH hue sweep used throughout.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Theme {
-    Blue, // cyan(200°) → indigo(280°)  [default]
-    Warm, // indigo(280°) → red(360°) → orange(40°)
+    Blue,    // cyan(200°) → indigo(280°)
+    Warm,    // indigo(280°) → red(360°) → orange(40°)  [default]
+    Rainbow, // cyan(200°) → indigo → red → orange(40°)  --color-me
+}
+
+/// Unit system for display.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Units {
+    Metric,   // default: °C, km/h, mm, hPa
+    Imperial, // --strange-units: °F, mph, in, inHg
+    British,  // --yes-sir: °C, mph, mm, hPa
+}
+
+impl Units {
+    pub fn use_fahrenheit(self) -> bool { self == Units::Imperial }
+    pub fn use_mph(self)        -> bool { self != Units::Metric }
+    pub fn use_inches(self)     -> bool { self == Units::Imperial }
+    pub fn use_inhg(self)       -> bool { self == Units::Imperial }
 }
 
 /// Forecast mode — Standard is the only implemented mode;
@@ -36,6 +52,8 @@ pub struct HourlyData {
 #[derive(Debug)]
 pub struct DaySummary {
     pub date: NaiveDate,
+    pub sunrise: NaiveDateTime,
+    pub sunset: NaiveDateTime,
     pub max_temp: f64,
     pub min_temp: f64,
     pub max_apparent: f64,
