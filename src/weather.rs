@@ -1,7 +1,7 @@
 use chrono::{NaiveDate, NaiveDateTime, Datelike};
 use serde::Deserialize;
 
-use crate::types::{DaySummary, HourlyData};
+use crate::types::{DaySummary, HistoricalDailyData, HourlyData};
 
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
@@ -231,6 +231,123 @@ pub fn drone_day_summary(
         max_gust_10m:  day.iter().map(|h| h.wind_gust_10m).fold(f64::NEG_INFINITY, f64::max),
         max_uv:        day.iter().map(|h| h.uv_index).fold(f64::NEG_INFINITY, f64::max),
     }
+}
+
+/// Fetch hourly historical data (use for ranges ≤ 31 days).
+/// Returns (url, Vec<HourlyData>) — precip_prob is derived from precipitation.
+pub fn fetch_historical_hourly(lat: f64, lng: f64, start: NaiveDate, end: NaiveDate)
+    -> anyhow::Result<(String, Vec<HourlyData>)>
+{
+    #[derive(Deserialize)]
+    struct H {
+        time: Vec<String>,
+        temperature_2m: Vec<Option<f64>>,
+        apparent_temperature: Vec<Option<f64>>,
+        precipitation: Vec<Option<f64>>,
+        pressure_msl: Vec<Option<f64>>,
+        relative_humidity_2m: Vec<Option<f64>>,
+        cloud_cover: Vec<Option<f64>>,
+        wind_speed_10m: Vec<Option<f64>>,
+        wind_gusts_10m: Vec<Option<f64>>,
+    }
+    #[derive(Deserialize)]
+    struct Resp { hourly: H }
+
+    let url = format!(
+        "https://archive-api.open-meteo.com/v1/archive\
+         ?latitude={lat}&longitude={lng}\
+         &hourly=temperature_2m,apparent_temperature,precipitation,\
+pressure_msl,relative_humidity_2m,cloud_cover,wind_speed_10m,wind_gusts_10m\
+         &start_date={start}&end_date={end}&timezone=auto"
+    );
+    let raw: serde_json::Value = reqwest::blocking::get(&url)?.json()?;
+    if let Some(reason) = raw.get("reason").and_then(|r| r.as_str()) {
+        anyhow::bail!("{}", reason);
+    }
+    let resp: Resp = serde_json::from_value(raw)?;
+    let h = &resp.hourly;
+    let data = h.time.iter().enumerate().map(|(i, t)| {
+        let time = NaiveDateTime::parse_from_str(t, "%Y-%m-%dT%H:%M").unwrap();
+        let precip = h.precipitation[i].unwrap_or(0.0);
+        HourlyData {
+            time,
+            temp:          h.temperature_2m[i].unwrap_or(0.0),
+            apparent_temp: h.apparent_temperature[i].unwrap_or(0.0),
+            precip,
+            precip_prob:   if precip > 0.0 { 100.0 } else { 0.0 },
+            pressure:      h.pressure_msl[i].unwrap_or(0.0),
+            humidity:      h.relative_humidity_2m[i].unwrap_or(0.0),
+            cloud:         h.cloud_cover[i].unwrap_or(0.0),
+            wind_speed:    h.wind_speed_10m[i].unwrap_or(0.0),
+            wind_gust:     h.wind_gusts_10m[i].unwrap_or(0.0),
+        }
+    }).collect();
+    Ok((url, data))
+}
+
+/// Fetch daily historical data (use for ranges > 31 days).
+pub fn fetch_historical_daily(lat: f64, lng: f64, start: NaiveDate, end: NaiveDate)
+    -> anyhow::Result<(String, Vec<HistoricalDailyData>)>
+{
+    #[derive(Deserialize)]
+    struct D {
+        time: Vec<String>,
+        temperature_2m_max: Vec<Option<f64>>,
+        temperature_2m_min: Vec<Option<f64>>,
+        precipitation_sum: Vec<Option<f64>>,
+        wind_speed_10m_max: Vec<Option<f64>>,
+        wind_gusts_10m_max: Vec<Option<f64>>,
+    }
+    #[derive(Deserialize)]
+    struct Resp { daily: D }
+
+    let url = format!(
+        "https://archive-api.open-meteo.com/v1/archive\
+         ?latitude={lat}&longitude={lng}\
+         &daily=temperature_2m_max,temperature_2m_min,\
+precipitation_sum,wind_speed_10m_max,wind_gusts_10m_max\
+         &start_date={start}&end_date={end}&timezone=auto"
+    );
+    let raw: serde_json::Value = reqwest::blocking::get(&url)?.json()?;
+    if let Some(reason) = raw.get("reason").and_then(|r| r.as_str()) {
+        anyhow::bail!("{}", reason);
+    }
+    let resp: Resp = serde_json::from_value(raw)?;
+    let d = &resp.daily;
+    let data = d.time.iter().enumerate().map(|(i, t)| {
+        let date = NaiveDate::parse_from_str(t, "%Y-%m-%d").unwrap();
+        HistoricalDailyData {
+            date,
+            max_temp:   d.temperature_2m_max[i].unwrap_or(0.0),
+            min_temp:   d.temperature_2m_min[i].unwrap_or(0.0),
+            precip_sum: d.precipitation_sum[i].unwrap_or(0.0),
+            wind_max:     d.wind_speed_10m_max[i].unwrap_or(0.0),
+            gust_max:     d.wind_gusts_10m_max[i].unwrap_or(0.0),
+        }
+    }).collect();
+    Ok((url, data))
+}
+
+/// Aggregate daily data into monthly buckets.
+pub fn aggregate_monthly(days: &[HistoricalDailyData]) -> Vec<crate::types::HistoricalMonthlyData> {
+    use crate::types::HistoricalMonthlyData;
+    use std::collections::BTreeMap;
+    let mut buckets: BTreeMap<(i32, u32), Vec<&HistoricalDailyData>> = BTreeMap::new();
+    for d in days {
+        buckets.entry((d.date.year(), d.date.month())).or_default().push(d);
+    }
+    buckets.into_iter().map(|((year, month), ds)| {
+        let n = ds.len() as f64;
+        HistoricalMonthlyData {
+            year,
+            month,
+            avg_max_temp: ds.iter().map(|d| d.max_temp).sum::<f64>() / n,
+            avg_min_temp: ds.iter().map(|d| d.min_temp).sum::<f64>() / n,
+            precip_sum:   ds.iter().map(|d| d.precip_sum).sum(),
+            wind_max:     ds.iter().map(|d| d.wind_max).fold(f64::NEG_INFINITY, f64::max),
+            gust_max:     ds.iter().map(|d| d.gust_max).fold(f64::NEG_INFINITY, f64::max),
+        }
+    }).collect()
 }
 
 pub fn day_name(date: NaiveDate) -> &'static str {

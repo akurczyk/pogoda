@@ -2,6 +2,7 @@ pub mod banner;
 pub mod bars;
 pub mod charts;
 pub mod drone;
+pub mod historical;
 pub mod table;
 
 use ratatui::{style::{Color, Modifier}, text::Span};

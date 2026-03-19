@@ -12,9 +12,14 @@ use std::io::{self, Write as IoWrite};
 use colors::palette;
 use geo::{geocode_city, looks_like_days, parse_days, parse_days_str, reverse_geocode};
 use render::{banner::print_banner, charts::print_overview, table::print_table};
+use render::historical::{
+    print_historical_daily_charts, print_historical_daily_table,
+    print_historical_monthly_charts, print_historical_monthly_table,
+    write_hist_footer,
+};
 use types::{Theme, Units, VERSION};
 use units::{c_to_f, hpa_to_inhg, kmh_to_mph, mm_to_in};
-use weather::{fetch_weather, fetch_drone_weather};
+use weather::{fetch_weather, fetch_drone_weather, fetch_historical_hourly, fetch_historical_daily, aggregate_monthly};
 
 fn print_usage() {
     eprintln!("Pogoda - Terminal Weather Forecast  v{VERSION}\n");
@@ -25,17 +30,20 @@ fn print_usage() {
     eprintln!("  days  Forecast days 1–16 (default: 7); range N-M shows only days N through M\n");
     eprintln!("Modifiers:");
     eprintln!("  --i-drone-you        Drone pilot profile: multi-altitude wind, rain intensity, UV");
+    eprintln!("  --delorean D1 D2     Historical data from D1 to D2 (DD.MM.YYYY); auto-selects hourly/daily/monthly");
     eprintln!("  --strange-units      American units: °F, mph, in, inHg");
     eprintln!("  --yes-sir            British units: °C, mph, mm, hPa");
-    eprintln!("  --i-am-blue          Cool color palette: cyan → blue → indigo");
+    eprintln!("  --i-am-blue          Cool palette: cyan → blue → indigo");
     eprintln!("  --color-me           Full palette: cyan → blue → indigo → red → orange");
+    eprintln!("  --classic-colors     Classic palette: blue → cyan → green → yellow → orange → red");
+    eprintln!("  --rainforest         Nature palette: cyan → green → lime");
     eprintln!("  --i-cant-afford-cga  Monochromatic output (no colors)");
     eprintln!("  --high-charts        Taller charts (24 rows)");
     eprintln!("  --no-charts          Skip the overview charts");
     eprintln!("  --no-table           Skip the hourly table");
     eprintln!("  --tabular-bells      Output CSV data instead of charts/table");
     eprintln!("  --no-eyecandy        Skip logo, location header and footer\n");
-    eprintln!("  (Warm palette indigo → red → orange is used by default)\n");
+    eprintln!("  (Default palette: indigo → red → orange)\n");
     eprintln!("Examples:");
     eprintln!("  pogoda 52.52 13.41");
     eprintln!("  pogoda 51.10,17.00 14");
@@ -55,6 +63,8 @@ fn main() -> anyhow::Result<()> {
     let british       = raw_args.iter().any(|a| a == "--yes-sir");
     let want_blue     = raw_args.iter().any(|a| a == "--i-am-blue");
     let want_rainbow  = raw_args.iter().any(|a| a == "--color-me");
+    let want_classic  = raw_args.iter().any(|a| a == "--classic-colors");
+    let want_rainforest       = raw_args.iter().any(|a| a == "--rainforest");
     let high_charts   = raw_args.iter().any(|a| a == "--high-charts");
     let no_charts     = raw_args.iter().any(|a| a == "--no-charts");
     let no_table      = raw_args.iter().any(|a| a == "--no-table");
@@ -63,15 +73,39 @@ fn main() -> anyhow::Result<()> {
     let no_eyecandy   = raw_args.iter().any(|a| a == "--no-eyecandy");
     let drone         = raw_args.iter().any(|a| a == "--i-drone-you");
 
+    // --delorean DD.MM.YYYY DD.MM.YYYY
+    let delorean_dates: Option<(chrono::NaiveDate, chrono::NaiveDate)> = {
+        raw_args.iter().position(|a| a == "--delorean").and_then(|pos| {
+            let parse = |s: &str| chrono::NaiveDate::parse_from_str(s, "%d.%m.%Y").ok();
+            let s = raw_args.get(pos + 1)?;
+            let e = raw_args.get(pos + 2)?;
+            Some((parse(s)?, parse(e)?))
+        })
+    };
+
     let units = if imperial { Units::Imperial } else if british { Units::British } else { Units::Metric };
-    let theme = if want_blue { Theme::Blue } else if want_rainbow { Theme::Rainbow } else { Theme::Warm };
+    let theme = if want_blue { Theme::Blue } else if want_rainbow { Theme::Rainbow }
+                else if want_classic { Theme::Classic } else if want_rainforest { Theme::Rainforest }
+                else { Theme::Warm };
     let chart_h: usize = if high_charts { 24 } else { 4 };
 
     let args: Vec<String> = raw_args.into_iter()
         .filter(|a| !matches!(a.as_str(),
-            "--strange-units" | "--yes-sir" | "--i-am-blue" |
+            "--strange-units" | "--yes-sir" | "--i-am-blue" | "--color-me" |
+            "--classic-colors" | "--rainforest" |
             "--high-charts" | "--no-charts" | "--no-table" | "--tabular-bells" |
-            "--i-cant-afford-cga" | "--no-eyecandy" | "--color-me" | "--i-drone-you"))
+            "--i-cant-afford-cga" | "--no-eyecandy" | "--i-drone-you" | "--delorean"))
+        // drop the two date args after --delorean
+        .scan(0i32, |skip, a| {
+            if *skip > 0 { *skip -= 1; return Some(None); }
+            if delorean_dates.is_some() && a.contains('.') && a.len() == 10
+                && a.chars().filter(|&c| c == '.').count() == 2
+                && chrono::NaiveDate::parse_from_str(&a, "%d.%m.%Y").is_ok() {
+                *skip = 0; return Some(None);
+            }
+            Some(Some(a))
+        })
+        .flatten()
         .collect();
 
     if args.len() < 2 {
@@ -120,6 +154,130 @@ fn main() -> anyhow::Result<()> {
     let term_w = crossterm::terminal::size().map(|(w, _)| w as usize).unwrap_or(120);
 
     let (day_from, day_to) = days;
+
+    if let Some((hist_start, hist_end)) = delorean_dates {
+        let n_days = (hist_end - hist_start).num_days() + 1;
+        if n_days < 1 {
+            eprintln!("Error: end date must be after start date.");
+            std::process::exit(1);
+        }
+
+        if !no_eyecandy {
+            let banner_main   = match palette(0.0, theme) { Color::Rgb(r, g, b) => (r, g, b), _ => (0, 188, 212) };
+            let banner_shadow = match palette(1.0, theme) { Color::Rgb(r, g, b) => (r, g, b), _ => (90, 0, 170) };
+            writeln!(out)?;
+            print_banner(&mut out, banner_main, banner_shadow, mono)?;
+            let lat_str = if lat >= 0.0 { format!("{:.2}°N", lat) } else { format!("{:.2}°S", lat.abs()) };
+            let lng_str = if lng >= 0.0 { format!("{:.2}°E", lng) } else { format!("{:.2}°W", lng.abs()) };
+            let range_str = format!("{} – {}", hist_start.format("%d.%m.%Y"), hist_end.format("%d.%m.%Y"));
+            let loc_prefix = match &location {
+                Some((city, country)) if !country.is_empty() => format!("{}, {}  ·  ", city, country),
+                Some((city, _)) => format!("{}  ·  ", city),
+                None => String::new(),
+            };
+            let mode_str = if n_days <= 31 { "Historical · hourly" }
+                           else if n_days <= 365 { "Historical · daily" }
+                           else { "Historical · monthly" };
+            writeln!(out, "Location: {}{}, {}  ·  {}  ·  {}\n",
+                loc_prefix, lat_str, lng_str, range_str, mode_str)?;
+        }
+
+        if n_days <= 31 {
+            let (url, data) = fetch_historical_hourly(lat, lng, hist_start, hist_end)?;
+
+            if tabular_bells {
+                let temp_unit = if units.use_fahrenheit() { "F"   } else { "C"    };
+                let wind_unit = if units.use_mph()         { "mph" } else { "km/h" };
+                let rain_unit = if units.use_inches()       { "in"  } else { "mm"   };
+                let pres_unit = if units.use_inhg()         { "inHg"} else { "hPa"  };
+                writeln!(out, "time,temp_{},feel_{},cloud_pct,precip_{},wind_{},gust_{},pressure_{},humidity_pct",
+                    temp_unit, temp_unit, rain_unit, wind_unit, wind_unit, pres_unit)?;
+                for h in &data {
+                    let temp     = if units.use_fahrenheit() { c_to_f(h.temp)           } else { h.temp           };
+                    let feel     = if units.use_fahrenheit() { c_to_f(h.apparent_temp)  } else { h.apparent_temp  };
+                    let precip   = if units.use_inches()      { mm_to_in(h.precip)       } else { h.precip         };
+                    let wind     = if units.use_mph()          { kmh_to_mph(h.wind_speed) } else { h.wind_speed     };
+                    let gust     = if units.use_mph()          { kmh_to_mph(h.wind_gust)  } else { h.wind_gust      };
+                    let pressure = if units.use_inhg()         { hpa_to_inhg(h.pressure)  } else { h.pressure       };
+                    writeln!(out, "{},{:.1},{:.1},{:.0},{:.2},{:.1},{:.1},{:.2},{:.0}",
+                        h.time.format("%Y-%m-%dT%H:%M"),
+                        temp, feel, h.cloud, precip, wind, gust, pressure, h.humidity)?;
+                }
+            } else {
+                if !no_charts {
+                    print_overview(&mut out, &data, term_w, units, theme, chart_h, mono, true)?;
+                }
+                let mut dates: Vec<chrono::NaiveDate> = data.iter().map(|h| h.time.date()).collect();
+                dates.dedup();
+                let solar: Vec<(chrono::NaiveDate, chrono::NaiveDateTime, chrono::NaiveDateTime)> =
+                    dates.iter().map(|d| (*d, d.and_hms_opt(6,0,0).unwrap(), d.and_hms_opt(20,0,0).unwrap())).collect();
+                let summaries: Vec<_> = dates.iter().map(|d| weather::day_summary(&data, &solar, *d)).collect();
+                if !no_table {
+                    print_table(&mut out, &data, &dates, &summaries, term_w, units, theme, mono, true)?;
+                }
+            }
+
+            if !no_eyecandy { write_hist_footer(&mut out, &url, mono, VERSION)?; }
+
+        } else {
+            let (url, daily) = fetch_historical_daily(lat, lng, hist_start, hist_end)?;
+
+            if n_days <= 365 {
+                if tabular_bells {
+                    let temp_unit = if units.use_fahrenheit() { "F"   } else { "C"    };
+                    let wind_unit = if units.use_mph()         { "mph" } else { "km/h" };
+                    let rain_unit = if units.use_inches()       { "in"  } else { "mm"   };
+                    writeln!(out, "date,tmax_{},tmin_{},precip_{},wind_max_{},gust_max_{}",
+                        temp_unit, temp_unit, rain_unit, wind_unit, wind_unit)?;
+                    for d in &daily {
+                        let tmax = if units.use_fahrenheit() { c_to_f(d.max_temp) } else { d.max_temp };
+                        let tmin = if units.use_fahrenheit() { c_to_f(d.min_temp) } else { d.min_temp };
+                        let rain = if units.use_inches() { mm_to_in(d.precip_sum) } else { d.precip_sum };
+                        let wmax = if units.use_mph() { kmh_to_mph(d.wind_max) } else { d.wind_max };
+                        let gmax = if units.use_mph() { kmh_to_mph(d.gust_max) } else { d.gust_max };
+                        writeln!(out, "{},{:.1},{:.1},{:.2},{:.1},{:.1}",
+                            d.date, tmax, tmin, rain, wmax, gmax)?;
+                    }
+                } else {
+                    if !no_charts {
+                        print_historical_daily_charts(&mut out, &daily, term_w, units, theme, chart_h, mono)?;
+                    }
+                    if !no_table {
+                        print_historical_daily_table(&mut out, &daily, term_w, units, theme, mono)?;
+                    }
+                }
+            } else {
+                let monthly = aggregate_monthly(&daily);
+                if tabular_bells {
+                    let temp_unit = if units.use_fahrenheit() { "F"   } else { "C"    };
+                    let wind_unit = if units.use_mph()         { "mph" } else { "km/h" };
+                    let rain_unit = if units.use_inches()       { "in"  } else { "mm"   };
+                    writeln!(out, "month,avg_tmax_{},avg_tmin_{},precip_sum_{},wind_max_{},gust_max_{}",
+                        temp_unit, temp_unit, rain_unit, wind_unit, wind_unit)?;
+                    for m in &monthly {
+                        let tmax = if units.use_fahrenheit() { c_to_f(m.avg_max_temp) } else { m.avg_max_temp };
+                        let tmin = if units.use_fahrenheit() { c_to_f(m.avg_min_temp) } else { m.avg_min_temp };
+                        let rain = if units.use_inches() { mm_to_in(m.precip_sum) } else { m.precip_sum };
+                        let wmax = if units.use_mph() { kmh_to_mph(m.wind_max) } else { m.wind_max };
+                        let gmax = if units.use_mph() { kmh_to_mph(m.gust_max) } else { m.gust_max };
+                        writeln!(out, "{}-{:02},{:.1},{:.1},{:.2},{:.1},{:.1}",
+                            m.year, m.month, tmax, tmin, rain, wmax, gmax)?;
+                    }
+                } else {
+                    if !no_charts {
+                        print_historical_monthly_charts(&mut out, &monthly, term_w, units, theme, chart_h, mono)?;
+                    }
+                    if !no_table {
+                        print_historical_monthly_table(&mut out, &monthly, term_w, units, theme, mono)?;
+                    }
+                }
+            }
+
+            if !no_eyecandy { write_hist_footer(&mut out, &url, mono, VERSION)?; }
+        }
+
+        return Ok(());
+    }
 
     if drone {
         let (api_url, mut drone_data, mut solar) = fetch_drone_weather(lat, lng, day_to)?;
@@ -201,7 +359,8 @@ fn main() -> anyhow::Result<()> {
             writeln!(out, "Data source: Open-Meteo (open-meteo.com) — free, open-source weather API")?;
             writeln!(out, "API URL:     {api_url}")?;
             writeln!(out)?;
-            writeln!(out, "Modifiers: --i-drone-you  --strange-units  --yes-sir  --i-am-blue  --color-me  --i-cant-afford-cga")?;
+            writeln!(out, "Modifiers: --i-drone-you  --delorean  --strange-units  --yes-sir")?;
+            writeln!(out, "           --i-am-blue  --color-me  --classic-colors  --rainforest  --i-cant-afford-cga")?;
             writeln!(out, "           --no-eyecandy  --high-charts  --no-charts  --no-table  --tabular-bells")?;
             writeln!(out)?;
             writeln!(out, "https://github.com/akurczyk/pogoda  v{VERSION}")?;
@@ -267,7 +426,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         if !no_charts {
-            print_overview(&mut out, &data, term_w, units, theme, chart_h, mono)?;
+            print_overview(&mut out, &data, term_w, units, theme, chart_h, mono, false)?;
         }
 
         let mut dates: Vec<chrono::NaiveDate> = data.iter().map(|h| h.time.date()).collect();
@@ -275,7 +434,7 @@ fn main() -> anyhow::Result<()> {
         let summaries: Vec<_> = dates.iter().map(|d| weather::day_summary(&data, &solar, *d)).collect();
 
         if !no_table {
-            print_table(&mut out, &data, &dates, &summaries, term_w, units, theme, mono)?;
+            print_table(&mut out, &data, &dates, &summaries, term_w, units, theme, mono, false)?;
         }
 
         if !no_eyecandy {
@@ -286,7 +445,8 @@ fn main() -> anyhow::Result<()> {
             writeln!(out, "Data source: Open-Meteo (open-meteo.com) — free, open-source weather API")?;
             writeln!(out, "API URL:     {api_url}")?;
             writeln!(out)?;
-            writeln!(out, "Modifiers: --i-drone-you  --strange-units  --yes-sir  --i-am-blue  --color-me  --i-cant-afford-cga")?;
+            writeln!(out, "Modifiers: --i-drone-you  --delorean  --strange-units  --yes-sir")?;
+            writeln!(out, "           --i-am-blue  --color-me  --classic-colors  --rainforest  --i-cant-afford-cga")?;
             writeln!(out, "           --no-eyecandy  --high-charts  --no-charts  --no-table  --tabular-bells")?;
             writeln!(out)?;
             writeln!(out, "https://github.com/akurczyk/pogoda  v{VERSION}")?;

@@ -21,10 +21,11 @@ pub const COL_DEFS: &[(&str, usize, usize)] = &[
     ("HUMIDITY %",    3, 10),
 ];
 
-pub fn col_title(i: usize, units: Units) -> &'static str {
+pub fn col_title(i: usize, units: Units, historical: bool) -> &'static str {
     match i {
         0 => if units.use_fahrenheit() { "TEMP/FEEL °F" } else { "TEMP/FEEL °C" },
-        2 => if units.use_inches()     { "RAIN %→/in↑" } else { "RAIN %→/mm↑" },
+        2 => if historical             { if units.use_inches() { "RAIN in" } else { "RAIN mm" } }
+             else                      { if units.use_inches() { "RAIN %→/in↑" } else { "RAIN %→/mm↑" } },
         3 => if units.use_mph()        { "WIND mph"     } else { "WIND km/h"    },
         4 => if units.use_inhg()       { "PRES inHg"    } else { "PRESSURE hPa" },
         _ => COL_DEFS[i].0,
@@ -65,6 +66,7 @@ pub fn print_table(
     units: Units,
     theme: Theme,
     mono: bool,
+    historical: bool,
 ) -> io::Result<()> {
     use chrono::NaiveDate;
     let temp_min = data.iter().map(|h| h.apparent_temp.min(h.temp)).fold(f64::INFINITY, f64::min) - 2.0;
@@ -110,7 +112,7 @@ pub fn print_table(
         Span::raw(format!("{:hour_w$}", "")),
     ];
     for (i, (_, lw, _)) in active.iter().enumerate() {
-        hdr_spans.push(Span::styled(hdr_col(*lw, bar_ws[i], col_title(i, units)), hdr));
+        hdr_spans.push(Span::styled(hdr_col(*lw, bar_ws[i], col_title(i, units, historical)), hdr));
     }
     lines.push(Line::from(hdr_spans));
     lines.push(Line::from(Span::styled("─".repeat(sep_w), dim)));
@@ -182,18 +184,29 @@ pub fn print_table(
                      value_bar(hd.cloud, 0.0, 100.0, bw, c))
                 }
                 2 => {
-                    let prob_t = hd.precip_prob / 100.0;
-                    let mm_t   = (hd.precip / max_mm).clamp(0.0, 1.0);
-                    let c = palette((prob_t * 0.5 + mm_t * 0.5).clamp(0.0, 1.0), theme);
                     let mm_disp  = if units.use_inches() { mm_to_in(hd.precip) } else { hd.precip };
                     let max_disp = if units.use_inches() { mm_to_in(max_mm) }    else { max_mm };
-                    let label = if units.use_inches() {
-                        format!("{:>3.0}%/{:>4.2}", hd.precip_prob, mm_disp)
+                    let c = palette((mm_disp / max_disp).clamp(0.0, 1.0), theme);
+                    if historical {
+                        let label = if units.use_inches() {
+                            format!("{:>8.2}", mm_disp)
+                        } else {
+                            format!("{:>8.1}", mm_disp)
+                        };
+                        (Span::styled(label, Style::default().fg(c)),
+                         value_bar(mm_disp, 0.0, max_disp, bw, c))
                     } else {
-                        format!("{:>3.0}%/{:>4.1}", hd.precip_prob, mm_disp)
-                    };
-                    (Span::styled(label, Style::default().fg(c)),
-                     rain_block_cell(hd.precip_prob, mm_disp, max_disp, bw, c))
+                        let prob_t = hd.precip_prob / 100.0;
+                        let mm_t   = (hd.precip / max_mm).clamp(0.0, 1.0);
+                        let c = palette((prob_t * 0.5 + mm_t * 0.5).clamp(0.0, 1.0), theme);
+                        let label = if units.use_inches() {
+                            format!("{:>3.0}%/{:>4.2}", hd.precip_prob, mm_disp)
+                        } else {
+                            format!("{:>3.0}%/{:>4.1}", hd.precip_prob, mm_disp)
+                        };
+                        (Span::styled(label, Style::default().fg(c)),
+                         rain_block_cell(hd.precip_prob, mm_disp, max_disp, bw, c))
+                    }
                 }
                 3 => {
                     let (ds, dg) = if units.use_mph() {

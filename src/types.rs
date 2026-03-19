@@ -1,13 +1,15 @@
 use chrono::{NaiveDate, NaiveDateTime};
 
-pub const VERSION: &str = "0.5";
+pub const VERSION: &str = "0.6";
 
 /// Display theme — controls the OKLCH hue sweep used throughout.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Theme {
-    Blue,    // cyan(200°) → indigo(280°)
-    Warm,    // indigo(280°) → red(360°) → orange(40°)  [default]
-    Rainbow, // cyan(200°) → indigo → red → orange(40°)  --color-me
+    Blue,    // cyan(200°) → indigo(280°)           --i-am-blue
+    Warm,    // indigo(280°) → red(360°) → orange    [default]
+    Rainbow, // cyan(200°) → indigo → red → orange   --color-me
+    Classic, // blue(264°) → cyan → green → yellow → orange → red(27°)  --classic-colors
+    Rainforest,      // cyan(200°) → green → lime(120°)      --rainforest
 }
 
 /// Unit system for display.
@@ -83,6 +85,29 @@ pub struct DroneDaySummary {
     pub max_wind_180m: f64,
     pub max_gust_10m: f64,
     pub max_uv: f64,
+}
+
+/// One day of historical data (from the archive daily API).
+#[derive(Debug)]
+pub struct HistoricalDailyData {
+    pub date: NaiveDate,
+    pub max_temp: f64,
+    pub min_temp: f64,
+    pub precip_sum: f64,
+    pub wind_max: f64,
+    pub gust_max: f64,
+}
+
+/// One month aggregated from HistoricalDailyData.
+#[derive(Debug)]
+pub struct HistoricalMonthlyData {
+    pub year: i32,
+    pub month: u32,
+    pub avg_max_temp: f64,
+    pub avg_min_temp: f64,
+    pub precip_sum: f64,
+    pub wind_max: f64,
+    pub gust_max: f64,
 }
 
 #[derive(Debug)]

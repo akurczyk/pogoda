@@ -7,7 +7,7 @@ use crate::units::{c_to_f, hpa_to_inhg, kmh_to_mph, mm_to_in};
 use crate::render::write_colored;
 
 /// Place `label` at `col` only if every slot is still the background char.
-fn try_place(chars: &mut Vec<char>, col: usize, label: &str, bg: char) {
+pub fn try_place(chars: &mut Vec<char>, col: usize, label: &str, bg: char) {
     let lc: Vec<char> = label.chars().collect();
     let end = (col + lc.len()).min(chars.len());
     if col < chars.len() && chars[col..end].iter().all(|&c| c == bg) {
@@ -93,7 +93,7 @@ pub fn print_one_chart(
     Ok(())
 }
 
-pub fn print_overview(out: &mut impl IoWrite, data: &[HourlyData], term_w: usize, units: Units, theme: Theme, chart_h: usize, mono: bool) -> io::Result<()> {
+pub fn print_overview(out: &mut impl IoWrite, data: &[HourlyData], term_w: usize, units: Units, theme: Theme, chart_h: usize, mono: bool, historical: bool) -> io::Result<()> {
     use chrono::Timelike;
     if data.is_empty() { return Ok(()); }
 
@@ -155,10 +155,12 @@ pub fn print_overview(out: &mut impl IoWrite, data: &[HourlyData], term_w: usize
         chart_h, label_w, chart_w, term_w,
         &|v| format!("{:.0}%", v), &|_| Color::DarkGray, Color::White, r, '┼', mono)?;
 
-    print_one_chart(out, "RAIN %",
-        &rain_p, None, 0.0, 100.0,
-        chart_h, label_w, chart_w, term_w,
-        &|v| format!("{:.0}%", v), &|v| palette(v / 100.0, theme), Color::White, r, '┼', mono)?;
+    if !historical {
+        print_one_chart(out, "RAIN %",
+            &rain_p, None, 0.0, 100.0,
+            chart_h, label_w, chart_w, term_w,
+            &|v| format!("{:.0}%", v), &|v| palette(v / 100.0, theme), Color::White, r, '┼', mono)?;
+    }
 
     print_one_chart(out, if units.use_inches() { "RAIN in" } else { "RAIN mm" },
         &rain_m, None, 0.0, rain_max,
@@ -189,7 +191,7 @@ pub fn print_overview(out: &mut impl IoWrite, data: &[HourlyData], term_w: usize
     let dim   = if mono { "" } else { "\x1b[90m" };
     let reset = if mono { "" } else { "\x1b[0m" };
 
-    write!(out, "{dim}{}├", " ".repeat(label_w))?;
+    write!(out, "{dim}{}└", " ".repeat(label_w))?;
     let mut day_chars: Vec<char> = vec!['─'; chart_w];
     for (di, hd) in data.iter().enumerate() {
         if hd.time.hour() == 0 {

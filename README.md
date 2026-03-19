@@ -1,8 +1,8 @@
 # Pogoda
 
-**Terminal Weather Forecast** — v0.5
+**Terminal Weather Forecast** — v0.6
 
-Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://open-meteo.com) and renders a rich, color-coded report directly in your terminal. It shows area charts for the full forecast period and an hourly table with bars, all scaled to your terminal width. A dedicated drone pilot mode (`--i-drone-you`) shows wind at multiple altitudes, rain intensity, and UV index.
+Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://open-meteo.com) and renders a rich, color-coded report directly in your terminal. It shows area charts for the full forecast period and an hourly table with bars, all scaled to your terminal width. A dedicated drone pilot mode (`--i-drone-you`) shows wind at multiple altitudes, rain intensity, and UV index. Historical data going back decades is available via `--delorean`, with automatic hourly/daily/monthly rendering based on the date range.
 
 ---
 
@@ -54,6 +54,29 @@ Hourly wind speed and direction at 10 m, 80 m, 120 m, and 180 m altitude, plus 1
 </tr>
 </table>
 
+<table>
+<tr>
+<td width="50%" valign="top">
+
+**Historical data — daily view — `--delorean D1 D2`**
+
+![Historical daily data](delorean-mo.png)
+
+Daily view for a single month: max/min temperature dual bars (● max / ◆ min), precipitation, and wind/gusts. `--classic-colors` palette (blue → cyan → green → yellow → orange → red) on a light terminal background.
+
+</td>
+<td width="50%" valign="top">
+
+**Historical data — monthly view — `--delorean D1 D2`**
+
+![Historical monthly data](delorean.png)
+
+Long-range monthly summary with area charts and a monthly table. The rendering mode is chosen automatically based on the date range. `--rainforest` nature palette (cyan → green → lime) on a dark terminal background.
+
+</td>
+</tr>
+</table>
+
 ---
 
 ## Installation
@@ -68,7 +91,7 @@ brew install pogoda
 **Download a pre-built binary** (Linux/macOS):
 
 ```bash
-# Replace <version> and <target> with the appropriate values, e.g. v0.5 and x86_64-unknown-linux-musl
+# Replace <version> and <target> with the appropriate values, e.g. v0.6 and x86_64-unknown-linux-musl
 curl -L https://github.com/akurczyk/pogoda/releases/download/<version>/pogoda-<target>.tar.gz | tar -xz
 sudo mv pogoda /usr/local/bin/
 ```
@@ -111,10 +134,13 @@ pogoda <city> [days]
 | Flag | Description |
 |------|-------------|
 | `--i-drone-you` | Drone pilot profile: wind at 10/80/120/180 m, rain intensity, UV index |
+| `--delorean D1 D2` | Historical data from D1 to D2 (DD.MM.YYYY); auto-selects hourly/daily/monthly |
 | `--strange-units` | American units: °F, mph, in, inHg |
 | `--yes-sir` | British units: °C, mph, mm, hPa |
 | `--i-am-blue` | Cool color palette (cyan → blue → indigo) |
 | `--color-me` | Full spectrum palette (cyan → blue → indigo → red → orange) |
+| `--classic-colors` | Classic palette (blue → cyan → green → yellow → orange → red) |
+| `--rainforest` | Nature palette (cyan → green → lime) |
 | `--i-cant-afford-cga` | Monochromatic output (no colors) |
 | `--high-charts` | Taller overview charts (24 rows instead of 4) |
 | `--no-charts` | Skip the overview charts |
@@ -122,7 +148,7 @@ pogoda <city> [days]
 | `--no-eyecandy` | Skip logo, location header and footer |
 | `--tabular-bells` | Output CSV data instead of charts/table |
 
-Modifiers can be combined freely. The warm indigo → red → orange palette is used by default; `--i-am-blue` switches to the cool cyan → blue → indigo palette.
+Modifiers can be combined freely. The warm indigo → red → orange palette is used by default.
 
 ### Drone pilot profile (`--i-drone-you`)
 
@@ -136,6 +162,16 @@ Designed for drone pilots and other low-altitude aviators. Replaces the standard
 - **Per-day summary** — max wind at each altitude, max gusts, peak UV, rain probability and total, sunrise/sunset
 
 CSV export (`--tabular-bells`) outputs all altitudes, directions, gusts, and UV per hour. All unit modifiers (`--strange-units`, `--yes-sir`) and palette flags work in drone mode.
+
+### Historical data (`--delorean D1 D2`)
+
+Fetches historical weather from the [Open-Meteo Archive API](https://open-meteo.com/en/docs/historical-weather-api) for any date range back to 1940. The rendering mode is selected automatically based on the range:
+
+- **≤ 31 days → hourly** — same charts and table as the standard forecast, with rain shown as precipitation amount only (no probability)
+- **32–365 days → daily** — overview charts (temp max/min, rain, wind, gusts) and a daily table with dual bars for temperature (● max / ◆ min) and wind (speed / gusts)
+- **> 365 days → monthly** — same charts and table aggregated to calendar months, with a year-based bottom axis
+
+CSV export (`--tabular-bells`) works for all three modes. All unit modifiers and palette flags apply.
 
 ---
 
@@ -156,6 +192,10 @@ pogoda Wrocław 7 --i-drone-you                  # Drone pilot profile
 pogoda Berlin 5-10 --i-drone-you                # Drone profile, days 5–10
 pogoda Alps 3 --i-drone-you --strange-units     # Drone profile, American units
 pogoda Wrocław 7 --i-drone-you --tabular-bells  # Drone CSV export
+pogoda Wrocław --delorean 01.01.2024 31.01.2024         # Historical hourly (≤31 days)
+pogoda Berlin --delorean 01.01.2020 31.12.2020          # Historical daily (≤365 days)
+pogoda Warsaw --delorean 01.01.1980 20.09.2025 --rainforest     # Historical monthly, nature palette
+pogoda Paris --delorean 01.06.2023 30.06.2023 --tabular-bells  # Historical CSV export
 ```
 
 ---
