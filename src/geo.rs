@@ -31,7 +31,7 @@ pub fn reverse_geocode(lat: f64, lng: f64) -> anyhow::Result<(String, String)> {
     let resp: NomResp = client
         .get("https://nominatim.openstreetmap.org/reverse")
         .query(&[("lat", lat_s.as_str()), ("lon", lng_s.as_str()), ("format", "json")])
-        .header("User-Agent", "pogoda/0.3")
+        .header("User-Agent", "pogoda/0.5")
         .send()?.json()?;
     let city = resp.address.city
         .or(resp.address.town)

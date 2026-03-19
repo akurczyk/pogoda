@@ -1,6 +1,6 @@
 # Pogoda
 
-**Terminal Weather Forecast** — v0.3
+**Terminal Weather Forecast** — v0.5
 
 Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://open-meteo.com) and renders a rich, color-coded report directly in your terminal. It shows area charts for the full forecast period and an hourly table with bars, all scaled to your terminal width. A dedicated drone pilot mode (`--i-drone-you`) shows wind at multiple altitudes, rain intensity, and UV index.
 
@@ -68,7 +68,7 @@ brew install pogoda
 **Download a pre-built binary** (Linux/macOS):
 
 ```bash
-# Replace <version> and <target> with the appropriate values, e.g. v0.3.0 and x86_64-unknown-linux-musl
+# Replace <version> and <target> with the appropriate values, e.g. v0.5 and x86_64-unknown-linux-musl
 curl -L https://github.com/akurczyk/pogoda/releases/download/<version>/pogoda-<target>.tar.gz | tar -xz
 sudo mv pogoda /usr/local/bin/
 ```

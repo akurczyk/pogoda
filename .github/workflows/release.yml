@@ -79,3 +79,54 @@ jobs:
         with:
           files: artifacts/*
           generate_release_notes: true
+
+  homebrew:
+    name: Update Homebrew formula
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Compute SHAs and update formula
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          SHA_ARM=$(sha256sum artifacts/pogoda-aarch64-apple-darwin.tar.gz | awk '{print $1}')
+          SHA_X86=$(sha256sum artifacts/pogoda-x86_64-apple-darwin.tar.gz  | awk '{print $1}')
+
+          git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/akurczyk/homebrew-pogoda.git tap
+          cd tap
+
+          cat > pogoda.rb <<EOF
+          class Pogoda < Formula
+            desc "Terminal Weather Forecast"
+            homepage "https://github.com/akurczyk/pogoda"
+            version "${VERSION}"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/akurczyk/pogoda/releases/download/${TAG}/pogoda-aarch64-apple-darwin.tar.gz"
+                sha256 "${SHA_ARM}"
+              else
+                url "https://github.com/akurczyk/pogoda/releases/download/${TAG}/pogoda-x86_64-apple-darwin.tar.gz"
+                sha256 "${SHA_X86}"
+              end
+            end
+
+            def install
+              bin.install "pogoda"
+            end
+          end
+          EOF
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pogoda.rb
+          git commit -m "pogoda ${VERSION}"
+          git push

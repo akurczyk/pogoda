@@ -6,7 +6,7 @@ use ratatui::{
 use std::io::{self, Write as IoWrite};
 
 use crate::colors::{cloud_color, palette, pressure_color, temp_color, wind_color};
-use crate::render::{bars::{temp_bar, value_bar, wind_bar}, emit_span};
+use crate::render::{bars::{rain_block_cell, temp_bar, value_bar, wind_bar}, emit_span};
 use crate::types::{DaySummary, HourlyData, Theme, Units};
 use crate::units::{c_to_f, hpa_to_inhg, kmh_to_mph, mm_to_in};
 use crate::weather::day_name;
@@ -15,8 +15,7 @@ use crate::weather::day_name;
 pub const COL_DEFS: &[(&str, usize, usize)] = &[
     ("TEMP/FEEL °C", 11, 9),
     ("CLOUD %",       3, 10),
-    ("RAIN %",        3, 10),
-    ("RAIN mm",       4,  8),
+    ("RAIN %→/mm↑",   9, 10),
     ("WIND km/h",    11,  9),
     ("PRESSURE hPa",  6,  8),
     ("HUMIDITY %",    3, 10),
@@ -25,9 +24,9 @@ pub const COL_DEFS: &[(&str, usize, usize)] = &[
 pub fn col_title(i: usize, units: Units) -> &'static str {
     match i {
         0 => if units.use_fahrenheit() { "TEMP/FEEL °F" } else { "TEMP/FEEL °C" },
-        3 => if units.use_inches()     { "RAIN in"      } else { "RAIN mm"      },
-        4 => if units.use_mph()        { "WIND mph"     } else { "WIND km/h"    },
-        5 => if units.use_inhg()       { "PRES inHg"    } else { "PRESSURE hPa" },
+        2 => if units.use_inches()     { "RAIN %→/in↑" } else { "RAIN %→/mm↑" },
+        3 => if units.use_mph()        { "WIND mph"     } else { "WIND km/h"    },
+        4 => if units.use_inhg()       { "PRES inHg"    } else { "PRESSURE hPa" },
         _ => COL_DEFS[i].0,
     }
 }
@@ -73,6 +72,7 @@ pub fn print_table(
     let pressure_min = data.iter().map(|h| h.pressure).fold(f64::INFINITY, f64::min) - 2.0;
     let pressure_max = data.iter().map(|h| h.pressure).fold(f64::NEG_INFINITY, f64::max) + 2.0;
     let wind_max = data.iter().map(|h| h.wind_gust.max(h.wind_speed)).fold(0.0_f64, f64::max) + 2.0;
+    let max_mm   = data.iter().map(|h| h.precip).fold(0.0_f64, f64::max).max(0.1);
 
     let day_w:  usize = 18;
     let hour_w: usize = 6;
@@ -182,21 +182,20 @@ pub fn print_table(
                      value_bar(hd.cloud, 0.0, 100.0, bw, c))
                 }
                 2 => {
-                    let c = palette(hd.precip_prob / 100.0, theme);
-                    (Span::styled(format!("{:>3.0}", hd.precip_prob), Style::default().fg(c)),
-                     value_bar(hd.precip_prob, 0.0, 100.0, bw, c))
+                    let prob_t = hd.precip_prob / 100.0;
+                    let mm_t   = (hd.precip / max_mm).clamp(0.0, 1.0);
+                    let c = palette((prob_t * 0.5 + mm_t * 0.5).clamp(0.0, 1.0), theme);
+                    let mm_disp  = if units.use_inches() { mm_to_in(hd.precip) } else { hd.precip };
+                    let max_disp = if units.use_inches() { mm_to_in(max_mm) }    else { max_mm };
+                    let label = if units.use_inches() {
+                        format!("{:>3.0}%/{:>4.2}", hd.precip_prob, mm_disp)
+                    } else {
+                        format!("{:>3.0}%/{:>4.1}", hd.precip_prob, mm_disp)
+                    };
+                    (Span::styled(label, Style::default().fg(c)),
+                     rain_block_cell(hd.precip_prob, mm_disp, max_disp, bw, c))
                 }
                 3 => {
-                    let c = palette((hd.precip / 10.0).clamp(0.0, 1.0), theme);
-                    let disp = if units.use_inches() {
-                        format!("{:>4.2}", mm_to_in(hd.precip))
-                    } else {
-                        format!("{:>4.1}", hd.precip)
-                    };
-                    (Span::styled(disp, Style::default().fg(c)),
-                     value_bar(hd.precip, 0.0, 10.0, bw, c))
-                }
-                4 => {
                     let (ds, dg) = if units.use_mph() {
                         (kmh_to_mph(hd.wind_speed), kmh_to_mph(hd.wind_gust))
                     } else {
@@ -206,7 +205,7 @@ pub fn print_table(
                     (Span::styled(format!("{:>5.1}/{:>5.1}", ds, dg), Style::default().fg(c)),
                      wind_bar(hd.wind_speed, hd.wind_gust, 0.0, wind_max, bw, theme))
                 }
-                5 => {
+                4 => {
                     let c = pressure_color(hd.pressure, theme);
                     let disp = if units.use_inhg() {
                         format!("{:>6.2}", hpa_to_inhg(hd.pressure))

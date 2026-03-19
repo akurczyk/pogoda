@@ -201,6 +201,9 @@ fn main() -> anyhow::Result<()> {
             writeln!(out, "Data source: Open-Meteo (open-meteo.com) — free, open-source weather API")?;
             writeln!(out, "API URL:     {api_url}")?;
             writeln!(out)?;
+            writeln!(out, "Modifiers: --i-drone-you  --strange-units  --yes-sir  --i-am-blue  --color-me  --i-cant-afford-cga")?;
+            writeln!(out, "           --no-eyecandy  --high-charts  --no-charts  --no-table  --tabular-bells")?;
+            writeln!(out)?;
             writeln!(out, "https://github.com/akurczyk/pogoda  v{VERSION}")?;
             write!(out, "{reset}")?;
         }

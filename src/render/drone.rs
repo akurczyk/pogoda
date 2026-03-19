@@ -6,7 +6,7 @@ use ratatui::{
 use std::io::{self, Write as IoWrite};
 
 use crate::colors::{palette, temp_color, wind_color};
-use crate::render::{bars::value_bar, emit_span};
+use crate::render::{bars::{rain_block_cell, value_bar}, emit_span};
 use crate::types::{DroneDaySummary, DroneHourlyData, Theme, Units};
 use crate::units::{c_to_f, kmh_to_mph, mm_to_in};
 use crate::weather::day_name;
@@ -16,24 +16,6 @@ pub fn wind_arrow(from_deg: f64) -> char {
     let to_deg = (from_deg + 180.0) % 360.0;
     let sector = ((to_deg + 22.5) / 45.0) as usize % 8;
     ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'][sector]
-}
-
-/// Block-fill cell: horizontal fill = prob%, block height = mm intensity.
-/// Background blocks: `_▁▂▃▄▅▆▇█`
-fn rain_block_cell(prob: f64, mm: f64, max_mm: f64, width: usize, color: Color) -> Vec<Span<'static>> {
-    const BLOCKS: &[char] = &['▁', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
-    let filled = ((prob / 100.0).clamp(0.0, 1.0) * width as f64).round() as usize;
-    if filled == 0 {
-        return vec![Span::raw(" ".repeat(width))];
-    }
-    let block_idx = ((mm / max_mm.max(0.001)).clamp(0.0, 1.0) * 8.0).round() as usize;
-    let ch = BLOCKS[block_idx];
-    let filled_str: String = std::iter::repeat(ch).take(filled).collect();
-    let mut spans = vec![Span::styled(filled_str, Style::default().fg(color))];
-    if filled < width {
-        spans.push(Span::raw(" ".repeat(width - filled)));
-    }
-    spans
 }
 
 /// (header, label_w, default_bar_w)

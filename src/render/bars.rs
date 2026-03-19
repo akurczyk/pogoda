@@ -31,3 +31,20 @@ pub fn temp_bar(temp: f64, apparent: f64, min: f64, max: f64, width: usize, them
 pub fn wind_bar(speed: f64, gust: f64, min: f64, max: f64, width: usize, theme: Theme) -> Vec<Span<'static>> {
     dual_bar(speed, gust, min, max, width, wind_color(speed, theme))
 }
+
+/// Block-fill cell: horizontal fill = prob%, block height character = mm intensity.
+pub fn rain_block_cell(prob: f64, mm: f64, max_mm: f64, width: usize, color: Color) -> Vec<Span<'static>> {
+    const BLOCKS: &[char] = &['▁', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+    let filled = ((prob / 100.0).clamp(0.0, 1.0) * width as f64).round() as usize;
+    if filled == 0 {
+        return vec![Span::raw(" ".repeat(width))];
+    }
+    let block_idx = ((mm / max_mm.max(0.001)).clamp(0.0, 1.0) * 8.0).round() as usize;
+    let ch = BLOCKS[block_idx];
+    let filled_str: String = std::iter::repeat(ch).take(filled).collect();
+    let mut spans = vec![Span::styled(filled_str, Style::default().fg(color))];
+    if filled < width {
+        spans.push(Span::raw(" ".repeat(width - filled)));
+    }
+    spans
+}
