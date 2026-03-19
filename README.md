@@ -178,23 +178,23 @@ CSV export (`--tabular-bells`) works for all three modes. All unit modifiers and
 ## Examples
 
 ```bash
-pogoda 52.52 13.41                              # Berlin, 7 days
-pogoda 51.10,17.00 14                           # Wrocław by coordinates, 14 days
-pogoda Wrocław                                  # City name lookup
-pogoda Wrocław 3-7                              # Days 3 through 7
-pogoda Berlin 5-10                              # Days 5 through 10
-pogoda New York 5 --strange-units               # American units
-pogoda London 7 --yes-sir                       # British units
-pogoda Tokyo 10 --i-am-blue                     # Cool color palette
-pogoda Berlin 7 --no-charts                     # Table only
-pogoda Paris 3 --tabular-bells                  # CSV output
-pogoda Wrocław 7 --i-drone-you                  # Drone pilot profile
-pogoda Berlin 5-10 --i-drone-you                # Drone profile, days 5–10
-pogoda Alps 3 --i-drone-you --strange-units     # Drone profile, American units
-pogoda Wrocław 7 --i-drone-you --tabular-bells  # Drone CSV export
-pogoda Wrocław --delorean 01.01.2024 31.01.2024         # Historical hourly (≤31 days)
-pogoda Berlin --delorean 01.01.2020 31.12.2020          # Historical daily (≤365 days)
-pogoda Warsaw --delorean 01.01.1980 20.09.2025 --rainforest     # Historical monthly, nature palette
+pogoda 52.52 13.41                                             # Berlin, 7 days
+pogoda 51.10,17.00 14                                          # Wrocław by coordinates, 14 days
+pogoda Wrocław                                                 # City name lookup
+pogoda Wrocław 3-7                                             # Days 3 through 7
+pogoda Berlin 5-10                                             # Days 5 through 10
+pogoda New York 5 --strange-units                              # American units
+pogoda London 7 --yes-sir                                      # British units
+pogoda Tokyo 10 --i-am-blue                                    # Cool color palette
+pogoda Berlin 7 --no-charts                                    # Table only
+pogoda Paris 3 --tabular-bells                                 # CSV output
+pogoda Wrocław 7 --i-drone-you                                 # Drone pilot profile
+pogoda Berlin 5-10 --i-drone-you                               # Drone profile, days 5–10
+pogoda Alps 3 --i-drone-you --strange-units                    # Drone profile, American units
+pogoda Wrocław 7 --i-drone-you --tabular-bells                 # Drone CSV export
+pogoda Wrocław --delorean 01.01.2024 31.01.2024                # Historical hourly (≤31 days)
+pogoda Berlin --delorean 01.01.2020 31.12.2020                 # Historical daily (≤365 days)
+pogoda Warsaw --delorean 01.01.1980 20.09.2025 --rainforest    # Historical monthly, nature palette
 pogoda Paris --delorean 01.06.2023 30.06.2023 --tabular-bells  # Historical CSV export
 ```
 
