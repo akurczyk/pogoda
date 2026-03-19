@@ -103,7 +103,7 @@ jobs:
           git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/akurczyk/homebrew-pogoda.git tap
           cd tap
 
-          cat > pogoda.rb <<EOF
+          cat > Formula/pogoda.rb <<EOF
           class Pogoda < Formula
             desc "Terminal Weather Forecast"
             homepage "https://github.com/akurczyk/pogoda"
@@ -127,6 +127,6 @@ jobs:
 
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add pogoda.rb
+          git add Formula/pogoda.rb
           git commit -m "pogoda ${VERSION}"
           git push
