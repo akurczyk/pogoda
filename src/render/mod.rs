@@ -17,20 +17,16 @@ pub fn emit_span(out: &mut impl IoWrite, span: &Span, mono: bool) -> io::Result<
         if has_bold { write!(out, "\x1b[0m")?; }
         return Ok(());
     }
-    let has_blink = style.add_modifier.contains(Modifier::SLOW_BLINK);
     let has_style = style.fg.is_some() || !style.add_modifier.is_empty();
-    if has_bold  { write!(out, "\x1b[1m")?; }
-    if has_blink { write!(out, "\x1b[5m")?; }
+    if has_bold { write!(out, "\x1b[1m")?; }
     match style.bg {
         Some(Color::Rgb(r, g, b)) => write!(out, "\x1b[48;2;{r};{g};{b}m")?,
         _ => {}
     }
     match style.fg {
         Some(Color::Rgb(r, g, b)) => write!(out, "\x1b[38;2;{r};{g};{b}m")?,
-        Some(Color::White)        => write!(out, "\x1b[97m")?,
-        Some(Color::DarkGray)     => write!(out, "\x1b[90m")?,
-        Some(Color::Cyan)         => write!(out, "\x1b[36m")?,
-        Some(Color::Blue)         => write!(out, "\x1b[34m")?,
+        Some(Color::White)    => write!(out, "\x1b[97m")?,
+        Some(Color::DarkGray) => write!(out, "\x1b[90m")?,
         _ => {}
     }
     write!(out, "{}", span.content)?;
@@ -44,10 +40,9 @@ pub fn write_colored(out: &mut impl IoWrite, ch: &str, color: Color, mono: bool)
     } else {
         match color {
             Color::Rgb(r, g, b) => write!(out, "\x1b[38;2;{r};{g};{b}m{ch}\x1b[0m"),
-            Color::White        => write!(out, "\x1b[1;37m{ch}\x1b[0m"),
-            Color::DarkGray     => write!(out, "\x1b[90m{ch}\x1b[0m"),
-            Color::Cyan         => write!(out, "\x1b[36m{ch}\x1b[0m"),
-            _                   => write!(out, "{ch}"),
+            Color::White    => write!(out, "\x1b[1;37m{ch}\x1b[0m"),
+            Color::DarkGray => write!(out, "\x1b[90m{ch}\x1b[0m"),
+            _               => write!(out, "{ch}"),
         }
     }
 }
