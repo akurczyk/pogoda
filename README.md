@@ -14,7 +14,7 @@ Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://ope
 
 **Default forecast**
 
-![Standard forecast](no-params.png)
+![Standard forecast](imgs/01.png)
 
 7-day hourly view: temperature/feel, cloud cover, precipitation probability and amount, wind speed/gusts, pressure, and humidity. Cool cyan–blue–indigo palette enabled with `--i-am-blue` on light terminal background.
 
@@ -23,7 +23,7 @@ Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://ope
 
 **American units — `--strange-units`**
 
-![Strange units forecast](strange-units.png)
+![Strange units forecast](imgs/02.png)
 
 Data in °F, mph, inches of rain, and inHg pressure. All charts and the hourly table update accordingly. Warm indigo → red → orange palette (default one) on a dark terminal background.
 
@@ -37,7 +37,7 @@ Data in °F, mph, inches of rain, and inHg pressure. All charts and the hourly t
 
 **Drone pilot profile — `--i-drone-you`**
 
-![Drone pilot profile](i-drone-you.png)
+![Drone pilot profile](imgs/03.png)
 
 Hourly wind speed and direction at 10 m, 80 m, 120 m, and 180 m altitude, plus 10 m gusts. Rain shown as a block chart where fill width encodes precipitation probability and block height encodes intensity (mm). UV index with a color-scaled bar. Per-day summary includes max wind at each altitude, max gusts, peak UV, and sunrise/sunset. Direction arrows are **bold** when wind direction differs across altitudes — a quick shear indicator for safe flying.
 
@@ -46,7 +46,7 @@ Hourly wind speed and direction at 10 m, 80 m, 120 m, and 180 m altitude, plus 1
 
 **High-resolution charts — `--high-charts`**
 
-![High-resolution charts](high-charts.png)
+![High-resolution charts](imgs/04.png)
 
 24-row charts with per-row scale labels for fine-grained reading of temperature, wind, pressure and other metrics.
 
@@ -60,7 +60,7 @@ Hourly wind speed and direction at 10 m, 80 m, 120 m, and 180 m altitude, plus 1
 
 **Historical data — daily view — `--delorean D1 D2`**
 
-![Historical daily data](delorean-mo.png)
+![Historical daily data](imgs/05.png)
 
 Daily view for a single month: max/min temperature dual bars (● max / ◆ min), precipitation, and wind/gusts. `--classic-colors` palette (blue → cyan → green → yellow → orange → red) on a light terminal background.
 
@@ -69,7 +69,7 @@ Daily view for a single month: max/min temperature dual bars (● max / ◆ min)
 
 **Historical data — monthly view — `--delorean D1 D2`**
 
-![Historical monthly data](delorean.png)
+![Historical monthly data](imgs/06.png)
 
 Long-range monthly summary with area charts and a monthly table. The rendering mode is chosen automatically based on the date range. `--rainforest` nature palette (cyan → green → lime) on a dark terminal background.
 
