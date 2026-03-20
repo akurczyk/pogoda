@@ -58,7 +58,7 @@ Hourly wind speed and direction at 10 m, 80 m, 120 m, and 180 m altitude, plus 1
 <tr>
 <td width="50%" valign="top">
 
-**Historical data — daily view — `--delorean D1 D2`**
+**Historical data — daily — `--delorean D1 D2`**
 
 ![Historical daily data](imgs/05.png)
 
@@ -67,7 +67,7 @@ Daily view for a single month: max/min temperature dual bars (● max / ◆ min)
 </td>
 <td width="50%" valign="top">
 
-**Historical data — monthly view — `--delorean D1 D2`**
+**Historical data — monthly — `--delorean D1 D2`**
 
 ![Historical monthly data](imgs/06.png)
 
