@@ -19,6 +19,9 @@ pub fn dual_bar(primary: f64, secondary: f64, min: f64, max: f64, width: usize, 
     let s_pos = (((secondary - min) / (max - min)).clamp(0.0, 1.0) * (width as f64 - 1.0)).round() as usize;
     let mut chars: Vec<(char, Style)> = vec![(' ', Style::default()); width];
     for i in 0..=p_pos { chars[i] = ('─', Style::default().fg(color)); }
+    if s_pos > p_pos {
+        for i in (p_pos + 1)..s_pos.min(width) { chars[i] = ('┈', Style::default().fg(color)); }
+    }
     if s_pos < width { chars[s_pos] = ('◆', Style::default().fg(color).add_modifier(Modifier::BOLD)); }
     if p_pos < width { chars[p_pos] = ('●', Style::default().fg(color).add_modifier(Modifier::BOLD)); }
     chars.into_iter().map(|(c, s)| Span::styled(c.to_string(), s)).collect()

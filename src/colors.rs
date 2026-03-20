@@ -38,3 +38,60 @@ pub fn temp_color(t: f64, theme: Theme) -> Color      { palette(((t + 15.0) / 45
 pub fn wind_color(s: f64, theme: Theme) -> Color      { palette((s / 60.0).clamp(0.0, 1.0), theme) }
 pub fn pressure_color(p: f64, theme: Theme) -> Color  { palette(1.0 - ((p - 985.0) / 55.0).clamp(0.0, 1.0), theme) }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn is_rgb(c: Color) -> bool { matches!(c, Color::Rgb(_, _, _)) }
+
+    #[test]
+    fn palette_returns_rgb_for_all_themes() {
+        for theme in [Theme::Warm, Theme::Blue, Theme::Rainbow, Theme::Classic, Theme::Rainforest] {
+            assert!(is_rgb(palette(0.0, theme)));
+            assert!(is_rgb(palette(0.5, theme)));
+            assert!(is_rgb(palette(1.0, theme)));
+        }
+    }
+
+    #[test]
+    fn palette_clamps_out_of_range() {
+        // Values outside [0,1] must not panic and must return Rgb
+        assert!(is_rgb(palette(-1.0, Theme::Warm)));
+        assert!(is_rgb(palette(2.0,  Theme::Warm)));
+    }
+
+    #[test]
+    fn oklch_to_rgb_pure_black_approx() {
+        // L=0 should produce near-black
+        let Color::Rgb(r, g, b) = oklch_to_rgb(0.0, 0.0, 0.0) else { panic!("not Rgb") };
+        assert!(r < 10 && g < 10 && b < 10);
+    }
+
+    #[test]
+    fn cloud_color_is_dark_gray() {
+        assert_eq!(cloud_color(50.0), Color::DarkGray);
+    }
+
+    #[test]
+    fn temp_color_returns_rgb() {
+        // -15°C → t=0, 30°C → t=1
+        assert!(is_rgb(temp_color(-15.0, Theme::Warm)));
+        assert!(is_rgb(temp_color(30.0,  Theme::Warm)));
+        assert!(is_rgb(temp_color(0.0,   Theme::Blue)));
+    }
+
+    #[test]
+    fn wind_color_returns_rgb() {
+        assert!(is_rgb(wind_color(0.0,  Theme::Warm)));
+        assert!(is_rgb(wind_color(30.0, Theme::Classic)));
+        assert!(is_rgb(wind_color(60.0, Theme::Rainforest)));
+    }
+
+    #[test]
+    fn pressure_color_returns_rgb() {
+        assert!(is_rgb(pressure_color(985.0,  Theme::Warm)));  // t=1 → low
+        assert!(is_rgb(pressure_color(1040.0, Theme::Warm)));  // t=0 → high
+        assert!(is_rgb(pressure_color(1013.0, Theme::Blue)));
+    }
+}
+

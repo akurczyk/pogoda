@@ -1,6 +1,43 @@
 use chrono::{NaiveDate, NaiveDateTime};
 
-pub const VERSION: &str = "0.6";
+pub const VERSION: &str = "0.7";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn version_is_current() {
+        assert_eq!(VERSION, "0.7");
+    }
+
+    #[test]
+    fn units_metric_flags() {
+        let u = Units::Metric;
+        assert!(!u.use_fahrenheit());
+        assert!(!u.use_mph());
+        assert!(!u.use_inches());
+        assert!(!u.use_inhg());
+    }
+
+    #[test]
+    fn units_imperial_flags() {
+        let u = Units::Imperial;
+        assert!(u.use_fahrenheit());
+        assert!(u.use_mph());
+        assert!(u.use_inches());
+        assert!(u.use_inhg());
+    }
+
+    #[test]
+    fn units_british_flags() {
+        let u = Units::British;
+        assert!(!u.use_fahrenheit());
+        assert!(u.use_mph());
+        assert!(!u.use_inches());
+        assert!(!u.use_inhg());
+    }
+}
 
 /// Display theme — controls the OKLCH hue sweep used throughout.
 #[derive(Clone, Copy, PartialEq)]
@@ -105,6 +142,8 @@ pub struct HistoricalMonthlyData {
     pub month: u32,
     pub avg_max_temp: f64,
     pub avg_min_temp: f64,
+    pub extreme_max_temp: f64,
+    pub extreme_min_temp: f64,
     pub precip_sum: f64,
     pub wind_max: f64,
     pub gust_max: f64,

@@ -14,6 +14,68 @@ const MONTH_NAMES: &[&str] = &[
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
+// ── Axis helpers ─────────────────────────────────────────────────────────────
+
+fn write_daily_axis(
+    out: &mut impl IoWrite,
+    data: &[HistoricalDailyData],
+    label_w: usize,
+    chart_w: usize,
+    connector: char,
+    mono: bool,
+) -> io::Result<()> {
+    let dim   = if mono { "" } else { "\x1b[90m" };
+    let reset = if mono { "" } else { "\x1b[0m" };
+    let n = data.len();
+    if n == 0 { return Ok(()); }
+    write!(out, "{dim}{}{connector}", " ".repeat(label_w))?;
+    let mut axis: Vec<char> = vec!['─'; chart_w];
+    let mut last_month = 0u32;
+    for (di, d) in data.iter().enumerate() {
+        if d.date.month() != last_month {
+            let col = di * chart_w / n;
+            try_place(&mut axis, col,
+                &format!("{} {}", MONTH_NAMES[d.date.month() as usize], d.date.year()), '─');
+            last_month = d.date.month();
+        }
+    }
+    writeln!(out, "{}{reset}", axis.iter().collect::<String>())
+}
+
+fn write_monthly_axis(
+    out: &mut impl IoWrite,
+    data: &[HistoricalMonthlyData],
+    label_w: usize,
+    chart_w: usize,
+    connector: char,
+    mono: bool,
+) -> io::Result<()> {
+    let dim   = if mono { "" } else { "\x1b[90m" };
+    let reset = if mono { "" } else { "\x1b[0m" };
+    let n = data.len();
+    if n == 0 { return Ok(()); }
+    write!(out, "{dim}{}{connector}", " ".repeat(label_w))?;
+    let mut axis: Vec<char> = vec!['─'; chart_w];
+    let cols_per_year = (chart_w as f64 / n as f64) * 12.0;
+    let year_interval: i32 = if cols_per_year >= 5.0 { 1 }
+        else if cols_per_year >= 3.0 { 2 }
+        else if cols_per_year >= 2.0 { 5 }
+        else if cols_per_year >= 1.0 { 10 }
+        else { 20 };
+    let first_year = data.first().map(|m| m.year).unwrap_or(0);
+    let mut last_yr = 0i32;
+    for (mi, m) in data.iter().enumerate() {
+        if m.year != last_yr {
+            if (m.year - first_year) % year_interval == 0 {
+                let col = mi * chart_w / n;
+                try_place(&mut axis, col, &format!("{}", m.year), '─');
+            }
+            last_yr = m.year;
+        }
+    }
+    writeln!(out, "{}{reset}", axis.iter().collect::<String>())
+}
+
 // ── Charts ────────────────────────────────────────────────────────────────────
 
 pub fn print_historical_daily_charts(
@@ -29,7 +91,6 @@ pub fn print_historical_daily_charts(
 
     let label_w: usize = 10;
     let chart_w = term_w.saturating_sub(label_w + 1);
-    let n = data.len();
 
     let max_temps: Vec<f64> = data.iter().map(|d| d.max_temp).collect();
     let min_temps: Vec<f64> = data.iter().map(|d| d.min_temp).collect();
@@ -52,43 +113,33 @@ pub fn print_historical_daily_charts(
     print_one_chart(out, if units.use_fahrenheit() { "TEMP MAX °F" } else { "TEMP MAX °C" },
         &max_temps, None, temp_min, temp_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| tf(v), &|v| temp_color(v, theme), Color::White, r, '┬', mono)?;
+        &|v| tf(v), &|v| temp_color(v, theme), Color::White, r, '┬', false, mono)?;
+    write_daily_axis(out, data, label_w, chart_w, '├', mono)?;
 
     print_one_chart(out, if units.use_fahrenheit() { "TEMP MIN °F" } else { "TEMP MIN °C" },
         &min_temps, None, temp_min, temp_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| tf(v), &|v| temp_color(v, theme), Color::White, r, '┼', mono)?;
+        &|v| tf(v), &|v| temp_color(v, theme), Color::White, r, '┼', false, mono)?;
+    write_daily_axis(out, data, label_w, chart_w, '├', mono)?;
 
     print_one_chart(out, if units.use_inches() { "RAIN in" } else { "RAIN mm" },
         &precip, None, 0.0, rain_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| rf(v), &|v| palette((v / rain_max).clamp(0.0, 1.0), theme), Color::White, r, '┼', mono)?;
+        &|v| rf(v), &|v| palette((v / rain_max).clamp(0.0, 1.0), theme), Color::White, r, '┼', false, mono)?;
+    write_daily_axis(out, data, label_w, chart_w, '├', mono)?;
 
     print_one_chart(out, if units.use_mph() { "WIND mph" } else { "WIND km/h" },
         &winds, None, 0.0, wind_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| wf(v), &|v| wind_color(v, theme), Color::White, r, '┼', mono)?;
+        &|v| wf(v), &|v| wind_color(v, theme), Color::White, r, '┼', false, mono)?;
+    write_daily_axis(out, data, label_w, chart_w, '├', mono)?;
 
     print_one_chart(out, if units.use_mph() { "GUSTS mph" } else { "GUSTS km/h" },
         &gusts, None, 0.0, wind_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| wf(v), &|v| wind_color(v, theme), Color::White, r, '┼', mono)?;
+        &|v| wf(v), &|v| wind_color(v, theme), Color::White, r, '┼', false, mono)?;
+    write_daily_axis(out, data, label_w, chart_w, '└', mono)?;
 
-    // Bottom axis: month/year labels
-    let dim   = if mono { "" } else { "\x1b[90m" };
-    let reset = if mono { "" } else { "\x1b[0m" };
-    write!(out, "{dim}{}└", " ".repeat(label_w))?;
-    let mut axis: Vec<char> = vec!['─'; chart_w];
-    let mut last_month = 0u32;
-    for (di, d) in data.iter().enumerate() {
-        if d.date.month() != last_month {
-            let col = di * chart_w / n;
-            try_place(&mut axis, col,
-                &format!("{} {}", MONTH_NAMES[d.date.month() as usize], d.date.year()), '─');
-            last_month = d.date.month();
-        }
-    }
-    writeln!(out, "{}{reset}", axis.iter().collect::<String>())?;
     writeln!(out)?;
     Ok(())
 }
@@ -106,16 +157,17 @@ pub fn print_historical_monthly_charts(
 
     let label_w: usize = 10;
     let chart_w = term_w.saturating_sub(label_w + 1);
-    let n = data.len();
 
-    let max_t:  Vec<f64> = data.iter().map(|m| m.avg_max_temp).collect();
-    let min_t:  Vec<f64> = data.iter().map(|m| m.avg_min_temp).collect();
-    let precip: Vec<f64> = data.iter().map(|m| m.precip_sum).collect();
-    let winds:  Vec<f64> = data.iter().map(|m| m.wind_max).collect();
-    let gusts:  Vec<f64> = data.iter().map(|m| m.gust_max).collect();
+    let max_t:   Vec<f64> = data.iter().map(|m| m.avg_max_temp).collect();
+    let min_t:   Vec<f64> = data.iter().map(|m| m.avg_min_temp).collect();
+    let ext_max: Vec<f64> = data.iter().map(|m| m.extreme_max_temp).collect();
+    let ext_min: Vec<f64> = data.iter().map(|m| m.extreme_min_temp).collect();
+    let precip:  Vec<f64> = data.iter().map(|m| m.precip_sum).collect();
+    let winds:   Vec<f64> = data.iter().map(|m| m.wind_max).collect();
+    let gusts:   Vec<f64> = data.iter().map(|m| m.gust_max).collect();
 
-    let temp_min = min_t.iter().cloned().fold(f64::INFINITY, f64::min) - 1.0;
-    let temp_max = max_t.iter().cloned().fold(f64::NEG_INFINITY, f64::max) + 1.0;
+    let temp_min = ext_min.iter().chain(min_t.iter()).cloned().fold(f64::INFINITY, f64::min) - 1.0;
+    let temp_max = ext_max.iter().chain(max_t.iter()).cloned().fold(f64::NEG_INFINITY, f64::max) + 1.0;
     let rain_max = precip.iter().cloned().fold(0.0_f64, f64::max).max(0.1);
     let wind_max = gusts.iter().chain(winds.iter()).cloned().fold(0.0_f64, f64::max) + 1.0;
 
@@ -125,53 +177,48 @@ pub fn print_historical_monthly_charts(
 
     let plain_ruler: Vec<char> = vec!['─'; chart_w];
     let r = &plain_ruler;
-    print_one_chart(out, if units.use_fahrenheit() { "TEMP MAX °F" } else { "TEMP MAX °C" },
+    print_one_chart(out, if units.use_fahrenheit() { "AVG TMAX °F" } else { "AVG TMAX °C" },
         &max_t, None, temp_min, temp_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| tf(v), &|v| temp_color(v, theme), Color::White, r, '┬', mono)?;
+        &|v| tf(v), &|v| temp_color(v, theme), Color::White, r, '┬', false, mono)?;
+    write_monthly_axis(out, data, label_w, chart_w, '├', mono)?;
 
-    print_one_chart(out, if units.use_fahrenheit() { "TEMP MIN °F" } else { "TEMP MIN °C" },
+    print_one_chart(out, if units.use_fahrenheit() { "AVG TMIN °F" } else { "AVG TMIN °C" },
         &min_t, None, temp_min, temp_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| tf(v), &|v| temp_color(v, theme), Color::White, r, '┼', mono)?;
+        &|v| tf(v), &|v| temp_color(v, theme), Color::White, r, '┼', false, mono)?;
+    write_monthly_axis(out, data, label_w, chart_w, '├', mono)?;
+
+    print_one_chart(out, if units.use_fahrenheit() { "EXT TMAX °F" } else { "EXT TMAX °C" },
+        &ext_max, None, temp_min, temp_max,
+        chart_h, label_w, chart_w, term_w,
+        &|v| tf(v), &|v| temp_color(v, theme), Color::White, r, '┼', false, mono)?;
+    write_monthly_axis(out, data, label_w, chart_w, '├', mono)?;
+
+    print_one_chart(out, if units.use_fahrenheit() { "EXT TMIN °F" } else { "EXT TMIN °C" },
+        &ext_min, None, temp_min, temp_max,
+        chart_h, label_w, chart_w, term_w,
+        &|v| tf(v), &|v| temp_color(v, theme), Color::White, r, '┼', false, mono)?;
+    write_monthly_axis(out, data, label_w, chart_w, '├', mono)?;
 
     print_one_chart(out, if units.use_inches() { "RAIN in" } else { "RAIN mm" },
         &precip, None, 0.0, rain_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| rf(v), &|v| palette((v / rain_max).clamp(0.0, 1.0), theme), Color::White, r, '┼', mono)?;
+        &|v| rf(v), &|v| palette((v / rain_max).clamp(0.0, 1.0), theme), Color::White, r, '┼', false, mono)?;
+    write_monthly_axis(out, data, label_w, chart_w, '├', mono)?;
 
     print_one_chart(out, if units.use_mph() { "WIND mph" } else { "WIND km/h" },
         &winds, None, 0.0, wind_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| wf(v), &|v| wind_color(v, theme), Color::White, r, '┼', mono)?;
+        &|v| wf(v), &|v| wind_color(v, theme), Color::White, r, '┼', false, mono)?;
+    write_monthly_axis(out, data, label_w, chart_w, '├', mono)?;
 
     print_one_chart(out, if units.use_mph() { "GUSTS mph" } else { "GUSTS km/h" },
         &gusts, None, 0.0, wind_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| wf(v), &|v| wind_color(v, theme), Color::White, r, '┼', mono)?;
+        &|v| wf(v), &|v| wind_color(v, theme), Color::White, r, '┼', false, mono)?;
+    write_monthly_axis(out, data, label_w, chart_w, '└', mono)?;
 
-    let dim   = if mono { "" } else { "\x1b[90m" };
-    let reset = if mono { "" } else { "\x1b[0m" };
-    write!(out, "{dim}{}└", " ".repeat(label_w))?;
-    let mut axis: Vec<char> = vec!['─'; chart_w];
-    let cols_per_year = (chart_w as f64 / n as f64) * 12.0;
-    let year_interval: i32 = if cols_per_year >= 5.0 { 1 }
-        else if cols_per_year >= 3.0 { 2 }
-        else if cols_per_year >= 2.0 { 5 }
-        else if cols_per_year >= 1.0 { 10 }
-        else { 20 };
-    let first_year = data.first().map(|m| m.year).unwrap_or(0);
-    let mut last_yr = 0i32;
-    for (mi, m) in data.iter().enumerate() {
-        if m.year != last_yr {
-            if (m.year - first_year) % year_interval == 0 {
-                let col = mi * chart_w / n;
-                try_place(&mut axis, col, &format!("{}", m.year), '─');
-            }
-            last_yr = m.year;
-        }
-    }
-    writeln!(out, "{}{reset}", axis.iter().collect::<String>())?;
     writeln!(out)?;
     Ok(())
 }
@@ -305,16 +352,18 @@ pub fn print_historical_daily_table(
 
 /// (header, label_w, default_bar_w)
 const HIST_MON_COLS: &[(&str, usize, usize)] = &[
-    ("TEMP °C",   11, 9),
-    ("RAIN mm",    7, 8),
-    ("WIND km/h", 11, 9),
+    ("AVG TEMP °C",  11, 9),
+    ("EXT TEMP °C",  11, 9),
+    ("RAIN mm",       7, 8),
+    ("WIND km/h",    11, 9),
 ];
 
 fn hist_mon_col_title(i: usize, units: Units) -> &'static str {
     match i {
-        0 => if units.use_fahrenheit() { "TEMP °F"  } else { "TEMP °C"   },
-        1 => if units.use_inches()     { "RAIN in"  } else { "RAIN mm"   },
-        2 => if units.use_mph()        { "WIND mph" } else { "WIND km/h" },
+        0 => if units.use_fahrenheit() { "AVG TEMP °F" } else { "AVG TEMP °C" },
+        1 => if units.use_fahrenheit() { "EXT TEMP °F" } else { "EXT TEMP °C" },
+        2 => if units.use_inches()     { "RAIN in"     } else { "RAIN mm"     },
+        3 => if units.use_mph()        { "WIND mph"    } else { "WIND km/h"   },
         _ => HIST_MON_COLS[i].0,
     }
 }
@@ -346,8 +395,8 @@ pub fn print_historical_monthly_table(
     let hdr_sty = Style::default().add_modifier(Modifier::BOLD);
     let dim_sty = Style::default().fg(Color::DarkGray);
 
-    let temp_min = data.iter().map(|m| m.avg_min_temp).fold(f64::INFINITY, f64::min) - 2.0;
-    let temp_max = data.iter().map(|m| m.avg_max_temp).fold(f64::NEG_INFINITY, f64::max) + 2.0;
+    let temp_min = data.iter().map(|m| m.extreme_min_temp.min(m.avg_min_temp)).fold(f64::INFINITY, f64::min) - 2.0;
+    let temp_max = data.iter().map(|m| m.extreme_max_temp.max(m.avg_max_temp)).fold(f64::NEG_INFINITY, f64::max) + 2.0;
     let rain_max = data.iter().map(|m| m.precip_sum).fold(0.0_f64, f64::max).max(0.1);
     let wind_max = data.iter().map(|m| m.gust_max.max(m.wind_max)).fold(0.0_f64, f64::max) + 2.0;
 
@@ -391,10 +440,20 @@ pub fn print_historical_monthly_table(
                     let c = temp_color((m.avg_max_temp + m.avg_min_temp) / 2.0, theme);
                     spans.push(Span::styled(format!("{:>5.1}/{:>5.1}", max_d, min_d), Style::default().fg(c)));
                     spans.push(Span::raw(" "));
-                    // ● marks avg_max, ◆ marks avg_min
                     spans.extend(dual_bar(m.avg_max_temp, m.avg_min_temp, temp_min, temp_max, bw, c));
                 }
                 1 => {
+                    let (max_d, min_d) = if units.use_fahrenheit() {
+                        (c_to_f(m.extreme_max_temp), c_to_f(m.extreme_min_temp))
+                    } else {
+                        (m.extreme_max_temp, m.extreme_min_temp)
+                    };
+                    let c = temp_color((m.extreme_max_temp + m.extreme_min_temp) / 2.0, theme);
+                    spans.push(Span::styled(format!("{:>5.1}/{:>5.1}", max_d, min_d), Style::default().fg(c)));
+                    spans.push(Span::raw(" "));
+                    spans.extend(dual_bar(m.extreme_max_temp, m.extreme_min_temp, temp_min, temp_max, bw, c));
+                }
+                2 => {
                     let disp  = if units.use_inches() { mm_to_in(m.precip_sum) } else { m.precip_sum };
                     let max_d = if units.use_inches() { mm_to_in(rain_max) }     else { rain_max };
                     let c = palette((disp / max_d).clamp(0.0, 1.0), theme);

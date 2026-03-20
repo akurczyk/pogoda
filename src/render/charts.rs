@@ -30,6 +30,7 @@ pub fn print_one_chart(
     s_color: Color,
     hour_ruler: &[char],
     title_connector: char,
+    show_ruler: bool,
     mono: bool,
 ) -> io::Result<()> {
     const BLOCKS: &[&str] = &[" ", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
@@ -86,9 +87,10 @@ pub fn print_one_chart(
         writeln!(out)?;
     }
 
-    // Hour ruler at the bottom of the chart
-    write!(out, "{dim}{}├", " ".repeat(label_w))?;
-    writeln!(out, "{}{reset}", hour_ruler.iter().collect::<String>())?;
+    if show_ruler {
+        write!(out, "{dim}{}├", " ".repeat(label_w))?;
+        writeln!(out, "{}{reset}", hour_ruler.iter().collect::<String>())?;
+    }
 
     Ok(())
 }
@@ -143,49 +145,49 @@ pub fn print_overview(out: &mut impl IoWrite, data: &[HourlyData], term_w: usize
     print_one_chart(out, if units.use_fahrenheit() { "TEMP °F" } else { "TEMP °C" },
         &temps, None, temp_min, temp_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| tf(v), &|v| temp_color(v, theme), Color::White, r, '┬', mono)?;
+        &|v| tf(v), &|v| temp_color(v, theme), Color::White, r, '┬', true, mono)?;
 
     print_one_chart(out, if units.use_fahrenheit() { "FEEL °F" } else { "FEEL °C" },
         &feels, None, temp_min, temp_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| tf(v), &|v| temp_color(v, theme), Color::White, r, '┼', mono)?;
+        &|v| tf(v), &|v| temp_color(v, theme), Color::White, r, '┼', true, mono)?;
 
     print_one_chart(out, "CLOUD %",
         &clouds, None, 0.0, 100.0,
         chart_h, label_w, chart_w, term_w,
-        &|v| format!("{:.0}%", v), &|_| Color::DarkGray, Color::White, r, '┼', mono)?;
+        &|v| format!("{:.0}%", v), &|_| Color::DarkGray, Color::White, r, '┼', true, mono)?;
 
     if !historical {
         print_one_chart(out, "RAIN %",
             &rain_p, None, 0.0, 100.0,
             chart_h, label_w, chart_w, term_w,
-            &|v| format!("{:.0}%", v), &|v| palette(v / 100.0, theme), Color::White, r, '┼', mono)?;
+            &|v| format!("{:.0}%", v), &|v| palette(v / 100.0, theme), Color::White, r, '┼', true, mono)?;
     }
 
     print_one_chart(out, if units.use_inches() { "RAIN in" } else { "RAIN mm" },
         &rain_m, None, 0.0, rain_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| rf(v), &|v| palette((v / rain_max).clamp(0.0, 1.0), theme), Color::White, r, '┼', mono)?;
+        &|v| rf(v), &|v| palette((v / rain_max).clamp(0.0, 1.0), theme), Color::White, r, '┼', true, mono)?;
 
     print_one_chart(out, if units.use_mph() { "WIND mph" } else { "WIND km/h" },
         &winds, None, 0.0, wind_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| wf(v), &|v| wind_color(v, theme), Color::White, r, '┼', mono)?;
+        &|v| wf(v), &|v| wind_color(v, theme), Color::White, r, '┼', true, mono)?;
 
     print_one_chart(out, if units.use_mph() { "GUSTS mph" } else { "GUSTS km/h" },
         &gusts, None, 0.0, wind_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| wf(v), &|v| wind_color(v, theme), Color::White, r, '┼', mono)?;
+        &|v| wf(v), &|v| wind_color(v, theme), Color::White, r, '┼', true, mono)?;
 
     print_one_chart(out, if units.use_inhg() { "PRES inHg" } else { "PRESSURE hPa" },
         &press, None, press_min, press_max,
         chart_h, label_w, chart_w, term_w,
-        &|v| pf(v), &|v| pressure_color(v, theme), Color::White, r, '┼', mono)?;
+        &|v| pf(v), &|v| pressure_color(v, theme), Color::White, r, '┼', true, mono)?;
 
     print_one_chart(out, "HUMIDITY %",
         &humid, None, 0.0, 100.0,
         chart_h, label_w, chart_w, term_w,
-        &|v| format!("{:.0}%", v), &|v| palette(v / 100.0, theme), Color::White, r, '┼', mono)?;
+        &|v| format!("{:.0}%", v), &|v| palette(v / 100.0, theme), Color::White, r, '┼', true, mono)?;
 
     // Day names below the last chart's ruler, on a ─ background
     let dim   = if mono { "" } else { "\x1b[90m" };

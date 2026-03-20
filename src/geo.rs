@@ -31,7 +31,7 @@ pub fn reverse_geocode(lat: f64, lng: f64) -> anyhow::Result<(String, String)> {
     let resp: NomResp = client
         .get("https://nominatim.openstreetmap.org/reverse")
         .query(&[("lat", lat_s.as_str()), ("lon", lng_s.as_str()), ("format", "json")])
-        .header("User-Agent", "pogoda/0.6")
+        .header("User-Agent", "pogoda/0.7")
         .send()?.json()?;
     let city = resp.address.city
         .or(resp.address.town)
@@ -80,4 +80,46 @@ pub fn looks_like_days(s: &str) -> bool {
         return a.parse::<u32>().is_ok() && b.parse::<u32>().is_ok();
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn looks_like_days_plain_number()  { assert!(looks_like_days("7")); }
+
+    #[test]
+    fn looks_like_days_range()         { assert!(looks_like_days("3-7")); }
+
+    #[test]
+    fn looks_like_days_city_name()     { assert!(!looks_like_days("Berlin")); }
+
+    #[test]
+    fn looks_like_days_float()         { assert!(!looks_like_days("3.14")); }
+
+    #[test]
+    fn parse_days_none_returns_default() {
+        assert_eq!(parse_days(None), (1, 7));
+    }
+
+    #[test]
+    fn parse_days_str_plain() {
+        assert_eq!(parse_days_str("7"), (1, 7));
+    }
+
+    #[test]
+    fn parse_days_str_plain_one() {
+        assert_eq!(parse_days_str("1"), (1, 1));
+    }
+
+    #[test]
+    fn parse_days_str_range() {
+        assert_eq!(parse_days_str("3-7"), (3, 7));
+    }
+
+    #[test]
+    fn parse_days_str_range_full() {
+        assert_eq!(parse_days_str("1-16"), (1, 16));
+    }
 }
