@@ -1,8 +1,8 @@
 # Pogoda
 
-**Terminal Weather Forecast** — v0.9
+**Terminal Weather Forecast** — v0.10
 
-Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://open-meteo.com) and renders a rich, color-coded report directly in your terminal. It shows area charts for the full forecast period and an hourly table with bars, all scaled to your terminal width. A dedicated drone pilot mode (`--i-drone-you`) shows wind at multiple altitudes, rain intensity, and UV index. Historical data going back decades is available via `--delorean`, with automatic hourly/daily/monthly rendering based on the date range.
+Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://open-meteo.com) and renders a rich, color-coded report directly in your terminal. It shows area charts for the full forecast period and an hourly table with bars, all scaled to your terminal width. **A dedicated drone pilot mode** (`--i-drone-you`) shows wind at multiple altitudes, rain intensity, and UV index. **Historical data going back decades** is available via `--delorean`, with automatic hourly/daily/monthly rendering based on the date range.
 
 ---
 
@@ -81,38 +81,55 @@ Long-range monthly summary with area charts and a monthly table. The rendering m
 
 ## Installation
 
-**macOS (Homebrew):**
+**Install via Homebrew (macOS):**
 
 ```bash
 brew tap akurczyk/pogoda
 brew install pogoda
 ```
 
-**Download a pre-built binary** (Linux/macOS):
+**Install via Cargo (Linux/macOS/Windows):**
 
 ```bash
-# Replace <version> and <target> with the appropriate values, e.g. v0.9 and x86_64-unknown-linux-musl
+cargo install pogoda
+```
+
+**Download a pre-built binary (Linux/macOS)**:
+
+```bash
+# Replace <version> and <target> with the appropriate values, e.g. v0.10 and x86_64-unknown-linux-musl
 curl -L https://github.com/akurczyk/pogoda/releases/download/<version>/pogoda-<target>.tar.gz | tar -xz
 sudo mv pogoda /usr/local/bin/
 ```
 
+**Download a pre-built binary (Windows)**:
+
+```powershell
+# Replace <version> and <target> with the appropriate values, e.g. v0.10 and x86_64-pc-windows-msvc
+Invoke-WebRequest -Uri https://github.com/akurczyk/pogoda/releases/download/<version>/pogoda-<target>.zip -OutFile pogoda.zip
+Expand-Archive pogoda.zip -DestinationPath .
+```
+
 Available targets:
 
-| Target | Platform |
-|--------|----------|
-| `x86_64-unknown-linux-musl` | Linux x86_64 |
-| `i686-unknown-linux-musl` | Linux x86 (32-bit) |
-| `aarch64-unknown-linux-musl` | Linux ARM64 |
-| `x86_64-apple-darwin` | macOS Intel |
-| `aarch64-apple-darwin` | macOS Apple Silicon |
+| Target | Platform | Archive |
+|--------|----------|---------|
+| `x86_64-unknown-linux-musl` | Linux x86_64 | `.tar.gz` |
+| `i686-unknown-linux-musl` | Linux x86 (32-bit) | `.tar.gz` |
+| `aarch64-unknown-linux-musl` | Linux ARM64 | `.tar.gz` |
+| `x86_64-apple-darwin` | macOS Intel | `.tar.gz` |
+| `aarch64-apple-darwin` | macOS Apple Silicon | `.tar.gz` |
+| `x86_64-pc-windows-msvc` | Windows x86_64 | `.zip` |
+| `i686-pc-windows-msvc` | Windows x86 (32-bit) | `.zip` |
+| `aarch64-pc-windows-msvc` | Windows ARM64 | `.zip` |
 
-**Build from source:**
+**Build from source (Linux/macOS/Windows):**
 
 ```bash
 git clone https://github.com/akurczyk/pogoda
 cd pogoda
 cargo build --release
-# binary at ./target/release/pogoda
+# binary at ./target/release/pogoda  (or pogoda.exe on Windows)
 ```
 
 ---

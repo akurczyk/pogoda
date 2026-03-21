@@ -1,6 +1,6 @@
 use chrono::{NaiveDate, NaiveDateTime};
 
-pub const VERSION: &str = "0.9";
+pub const VERSION: &str = "0.10";
 
 #[cfg(test)]
 mod tests {
@@ -8,7 +8,7 @@ mod tests {
 
     #[test]
     fn version_is_current() {
-        assert_eq!(VERSION, "0.9");
+        assert_eq!(VERSION, "0.10");
     }
 
     #[test]
