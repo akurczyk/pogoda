@@ -34,10 +34,10 @@ pub fn drone_col_title(i: usize, units: Units) -> &'static str {
     match i {
         0 => if units.use_fahrenheit() { "TEMP °F"      } else { "TEMP °C"      },
         1 => if units.use_inches()     { "RAIN %→/in↑" } else { "RAIN %→/mm↑" },
-        2 => if units.use_mph()        { "W  10m mph"   } else { "W  10m k/h"  },
-        3 => if units.use_mph()        { "W  80m mph"   } else { "W  80m k/h"  },
-        4 => if units.use_mph()        { "W 120m mph"   } else { "W 120m k/h"  },
-        5 => if units.use_mph()        { "W 180m mph"   } else { "W 180m k/h"  },
+        2 => if units.use_mph()        { "W  10m mph"   } else { "W 10m km/h"  },
+        3 => if units.use_mph()        { "W  80m mph"   } else { "W 80m km/h"  },
+        4 => if units.use_mph()        { "W 120m mph"   } else { "W 120m km/h" },
+        5 => if units.use_mph()        { "W 180m mph"   } else { "W 180m km/h" },
         _ => DRONE_COL_DEFS[i].0,
     }
 }

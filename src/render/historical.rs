@@ -104,7 +104,7 @@ pub fn print_historical_daily_charts(
     let wind_max = gusts.iter().chain(winds.iter()).cloned().fold(0.0_f64, f64::max) + 1.0;
 
     let tf = |v: f64| if units.use_fahrenheit() { format!("{:.1}°F", c_to_f(v)) } else { format!("{:.1}°C", v) };
-    let wf = |v: f64| if units.use_mph() { format!("{:.1}mph", kmh_to_mph(v)) } else { format!("{:.1}k/h", v) };
+    let wf = |v: f64| if units.use_mph() { format!("{:.1}mph", kmh_to_mph(v)) } else { format!("{:.1}km/h", v) };
     let rf = |v: f64| if units.use_inches() { format!("{:.2}in", mm_to_in(v)) } else { format!("{:.1}mm", v) };
 
     let plain_ruler: Vec<char> = vec!['─'; chart_w];
@@ -172,7 +172,7 @@ pub fn print_historical_monthly_charts(
     let wind_max = gusts.iter().chain(winds.iter()).cloned().fold(0.0_f64, f64::max) + 1.0;
 
     let tf = |v: f64| if units.use_fahrenheit() { format!("{:.1}°F", c_to_f(v)) } else { format!("{:.1}°C", v) };
-    let wf = |v: f64| if units.use_mph() { format!("{:.1}mph", kmh_to_mph(v)) } else { format!("{:.1}k/h", v) };
+    let wf = |v: f64| if units.use_mph() { format!("{:.1}mph", kmh_to_mph(v)) } else { format!("{:.1}km/h", v) };
     let rf = |v: f64| if units.use_inches() { format!("{:.2}in", mm_to_in(v)) } else { format!("{:.1}mm", v) };
 
     let plain_ruler: Vec<char> = vec!['─'; chart_w];
