@@ -91,7 +91,7 @@ brew install pogoda
 **Download a pre-built binary** (Linux/macOS):
 
 ```bash
-# Replace <version> and <target> with the appropriate values, e.g. v0.7 and x86_64-unknown-linux-musl
+# Replace <version> and <target> with the appropriate values, e.g. v0.8 and x86_64-unknown-linux-musl
 curl -L https://github.com/akurczyk/pogoda/releases/download/<version>/pogoda-<target>.tar.gz | tar -xz
 sudo mv pogoda /usr/local/bin/
 ```
