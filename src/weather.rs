@@ -1,21 +1,7 @@
-use chrono::{NaiveDate, NaiveDateTime, Datelike};
+use chrono::{Datelike, NaiveDate, NaiveDateTime};
 use serde::Deserialize;
 
 use crate::types::{DaySummary, HistoricalDailyData, HourlyData};
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct HourlyUnits {
-    temperature_2m: String,
-    apparent_temperature: String,
-    precipitation: String,
-    precipitation_probability: String,
-    pressure_msl: String,
-    relative_humidity_2m: String,
-    cloud_cover: String,
-    wind_speed_10m: String,
-    wind_gusts_10m: String,
-}
 
 #[derive(Debug, Deserialize)]
 struct Hourly {
@@ -39,9 +25,7 @@ struct Daily {
 }
 
 #[derive(Debug, Deserialize)]
-#[allow(dead_code)]
 struct WeatherResponse {
-    hourly_units: HourlyUnits,
     hourly: Hourly,
     daily: Daily,
 }
@@ -58,58 +42,92 @@ cloud_cover,wind_speed_10m,wind_gusts_10m\
     )
 }
 
-pub fn parse_forecast(body: &str) -> anyhow::Result<(Vec<HourlyData>, Vec<(NaiveDate, NaiveDateTime, NaiveDateTime)>)> {
+pub fn parse_forecast(
+    body: &str,
+) -> anyhow::Result<(
+    Vec<HourlyData>,
+    Vec<(NaiveDate, NaiveDateTime, NaiveDateTime)>,
+)> {
     let resp: WeatherResponse = serde_json::from_str(body)?;
     let h = &resp.hourly;
-    let data = h.time.iter().enumerate().map(|(i, t)| {
-        let time = NaiveDateTime::parse_from_str(t, "%Y-%m-%dT%H:%M").unwrap();
-        HourlyData {
-            time,
-            temp: h.temperature_2m[i].unwrap_or(0.0),
-            apparent_temp: h.apparent_temperature[i].unwrap_or(0.0),
-            precip: h.precipitation[i].unwrap_or(0.0),
-            precip_prob: h.precipitation_probability[i].unwrap_or(0.0),
-            pressure: h.pressure_msl[i].unwrap_or(0.0),
-            humidity: h.relative_humidity_2m[i].unwrap_or(0.0),
-            cloud: h.cloud_cover[i].unwrap_or(0.0),
-            wind_speed: h.wind_speed_10m[i].unwrap_or(0.0),
-            wind_gust: h.wind_gusts_10m[i].unwrap_or(0.0),
-        }
-    }).collect();
+    let data: anyhow::Result<Vec<HourlyData>> = h
+        .time
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            let time = NaiveDateTime::parse_from_str(t, "%Y-%m-%dT%H:%M")
+                .map_err(|e| anyhow::anyhow!("invalid time {:?}: {}", t, e))?;
+            Ok(HourlyData {
+                time,
+                temp: h.temperature_2m[i].unwrap_or(0.0),
+                apparent_temp: h.apparent_temperature[i].unwrap_or(0.0),
+                precip: h.precipitation[i].unwrap_or(0.0),
+                precip_prob: h.precipitation_probability[i].unwrap_or(0.0),
+                pressure: h.pressure_msl[i].unwrap_or(0.0),
+                humidity: h.relative_humidity_2m[i].unwrap_or(0.0),
+                cloud: h.cloud_cover[i].unwrap_or(0.0),
+                wind_speed: h.wind_speed_10m[i].unwrap_or(0.0),
+                wind_gust: h.wind_gusts_10m[i].unwrap_or(0.0),
+            })
+        })
+        .collect();
+    let data = data?;
 
     let d = &resp.daily;
-    let solar: Vec<(NaiveDate, NaiveDateTime, NaiveDateTime)> = d.time.iter().enumerate().map(|(i, t)| {
-        let date = NaiveDate::parse_from_str(t, "%Y-%m-%d").unwrap();
-        let fallback_rise = date.and_hms_opt(6, 0, 0).unwrap();
-        let fallback_set  = date.and_hms_opt(20, 0, 0).unwrap();
-        let sunrise = NaiveDateTime::parse_from_str(&d.sunrise[i], "%Y-%m-%dT%H:%M")
-            .unwrap_or(fallback_rise);
-        let sunset  = NaiveDateTime::parse_from_str(&d.sunset[i],  "%Y-%m-%dT%H:%M")
-            .unwrap_or(fallback_set);
-        (date, sunrise, sunset)
-    }).collect();
+    let solar: anyhow::Result<Vec<(NaiveDate, NaiveDateTime, NaiveDateTime)>> = d
+        .time
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            let date = NaiveDate::parse_from_str(t, "%Y-%m-%d")
+                .map_err(|e| anyhow::anyhow!("invalid date {:?}: {}", t, e))?;
+            let fallback_rise = date.and_hms_opt(6, 0, 0).unwrap();
+            let fallback_set = date.and_hms_opt(20, 0, 0).unwrap();
+            let sunrise = NaiveDateTime::parse_from_str(&d.sunrise[i], "%Y-%m-%dT%H:%M")
+                .unwrap_or(fallback_rise);
+            let sunset = NaiveDateTime::parse_from_str(&d.sunset[i], "%Y-%m-%dT%H:%M")
+                .unwrap_or(fallback_set);
+            Ok((date, sunrise, sunset))
+        })
+        .collect();
+    let solar = solar?;
 
     Ok((data, solar))
 }
 
-pub fn fetch_weather(lat: f64, lng: f64, days: u32) -> anyhow::Result<(String, Vec<HourlyData>, Vec<(NaiveDate, NaiveDateTime, NaiveDateTime)>)> {
+pub fn fetch_weather(
+    lat: f64,
+    lng: f64,
+    days: u32,
+) -> anyhow::Result<(
+    String,
+    Vec<HourlyData>,
+    Vec<(NaiveDate, NaiveDateTime, NaiveDateTime)>,
+)> {
     let url = build_url(lat, lng, days);
     let body = reqwest::blocking::get(&url)?.text()?;
     let (data, solar) = parse_forecast(&body)?;
     Ok((url, data, solar))
 }
 
-pub fn day_summary(data: &[HourlyData], solar: &[(NaiveDate, NaiveDateTime, NaiveDateTime)], date: NaiveDate) -> DaySummary {
+pub fn day_summary(
+    data: &[HourlyData],
+    solar: &[(NaiveDate, NaiveDateTime, NaiveDateTime)],
+    date: NaiveDate,
+) -> DaySummary {
     let day: Vec<&HourlyData> = data.iter().filter(|h| h.time.date() == date).collect();
     let temps: Vec<f64> = day.iter().map(|h| h.temp).collect();
     let apparents: Vec<f64> = day.iter().map(|h| h.apparent_temp).collect();
-    let (sunrise, sunset) = solar.iter()
+    let (sunrise, sunset) = solar
+        .iter()
         .find(|(d, _, _)| *d == date)
         .map(|(_, rise, set)| (*rise, *set))
-        .unwrap_or_else(|| (
-            date.and_hms_opt(6, 0, 0).unwrap(),
-            date.and_hms_opt(20, 0, 0).unwrap(),
-        ));
+        .unwrap_or_else(|| {
+            (
+                date.and_hms_opt(6, 0, 0).unwrap(),
+                date.and_hms_opt(20, 0, 0).unwrap(),
+            )
+        });
     DaySummary {
         date,
         sunrise,
@@ -119,12 +137,21 @@ pub fn day_summary(data: &[HourlyData], solar: &[(NaiveDate, NaiveDateTime, Naiv
         max_apparent: apparents.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
         min_apparent: apparents.iter().cloned().fold(f64::INFINITY, f64::min),
         avg_cloud: day.iter().map(|h| h.cloud).sum::<f64>() / day.len() as f64,
-        max_precip_prob: day.iter().map(|h| h.precip_prob).fold(f64::NEG_INFINITY, f64::max),
+        max_precip_prob: day
+            .iter()
+            .map(|h| h.precip_prob)
+            .fold(f64::NEG_INFINITY, f64::max),
         total_precip: day.iter().map(|h| h.precip).sum::<f64>(),
         avg_pressure: day.iter().map(|h| h.pressure).sum::<f64>() / day.len() as f64,
         avg_humidity: day.iter().map(|h| h.humidity).sum::<f64>() / day.len() as f64,
-        max_wind_speed: day.iter().map(|h| h.wind_speed).fold(f64::NEG_INFINITY, f64::max),
-        max_wind_gust: day.iter().map(|h| h.wind_gust).fold(f64::NEG_INFINITY, f64::max),
+        max_wind_speed: day
+            .iter()
+            .map(|h| h.wind_speed)
+            .fold(f64::NEG_INFINITY, f64::max),
+        max_wind_gust: day
+            .iter()
+            .map(|h| h.wind_gust)
+            .fold(f64::NEG_INFINITY, f64::max),
     }
 }
 
@@ -167,47 +194,74 @@ wind_gusts_10m,uv_index\
     )
 }
 
-pub fn parse_drone(body: &str) -> anyhow::Result<(Vec<crate::types::DroneHourlyData>, Vec<(NaiveDate, NaiveDateTime, NaiveDateTime)>)> {
+pub fn parse_drone(
+    body: &str,
+) -> anyhow::Result<(
+    Vec<crate::types::DroneHourlyData>,
+    Vec<(NaiveDate, NaiveDateTime, NaiveDateTime)>,
+)> {
     use crate::types::DroneHourlyData;
     let resp: DroneWeatherResponse = serde_json::from_str(body)?;
     let h = &resp.hourly;
-    let data = h.time.iter().enumerate().map(|(i, t)| {
-        let time = NaiveDateTime::parse_from_str(t, "%Y-%m-%dT%H:%M").unwrap();
-        DroneHourlyData {
-            time,
-            temp: h.temperature_2m[i].unwrap_or(0.0),
-            apparent_temp: h.apparent_temperature[i].unwrap_or(0.0),
-            precip_prob: h.precipitation_probability[i].unwrap_or(0.0),
-            precip: h.precipitation[i].unwrap_or(0.0),
-            wind_speed_10m: h.wind_speed_10m[i].unwrap_or(0.0),
-            wind_speed_80m: h.wind_speed_80m[i].unwrap_or(0.0),
-            wind_speed_120m: h.wind_speed_120m[i].unwrap_or(0.0),
-            wind_speed_180m: h.wind_speed_180m[i].unwrap_or(0.0),
-            wind_dir_10m: h.wind_direction_10m[i].unwrap_or(0.0),
-            wind_dir_80m: h.wind_direction_80m[i].unwrap_or(0.0),
-            wind_dir_120m: h.wind_direction_120m[i].unwrap_or(0.0),
-            wind_dir_180m: h.wind_direction_180m[i].unwrap_or(0.0),
-            wind_gust_10m: h.wind_gusts_10m[i].unwrap_or(0.0),
-            uv_index: h.uv_index[i].unwrap_or(0.0),
-        }
-    }).collect();
+    let data: anyhow::Result<Vec<DroneHourlyData>> = h
+        .time
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            let time = NaiveDateTime::parse_from_str(t, "%Y-%m-%dT%H:%M")
+                .map_err(|e| anyhow::anyhow!("invalid time {:?}: {}", t, e))?;
+            Ok(DroneHourlyData {
+                time,
+                temp: h.temperature_2m[i].unwrap_or(0.0),
+                apparent_temp: h.apparent_temperature[i].unwrap_or(0.0),
+                precip_prob: h.precipitation_probability[i].unwrap_or(0.0),
+                precip: h.precipitation[i].unwrap_or(0.0),
+                wind_speed_10m: h.wind_speed_10m[i].unwrap_or(0.0),
+                wind_speed_80m: h.wind_speed_80m[i].unwrap_or(0.0),
+                wind_speed_120m: h.wind_speed_120m[i].unwrap_or(0.0),
+                wind_speed_180m: h.wind_speed_180m[i].unwrap_or(0.0),
+                wind_dir_10m: h.wind_direction_10m[i].unwrap_or(0.0),
+                wind_dir_80m: h.wind_direction_80m[i].unwrap_or(0.0),
+                wind_dir_120m: h.wind_direction_120m[i].unwrap_or(0.0),
+                wind_dir_180m: h.wind_direction_180m[i].unwrap_or(0.0),
+                wind_gust_10m: h.wind_gusts_10m[i].unwrap_or(0.0),
+                uv_index: h.uv_index[i].unwrap_or(0.0),
+            })
+        })
+        .collect();
+    let data = data?;
 
     let d = &resp.daily;
-    let solar: Vec<(NaiveDate, NaiveDateTime, NaiveDateTime)> = d.time.iter().enumerate().map(|(i, t)| {
-        let date = NaiveDate::parse_from_str(t, "%Y-%m-%d").unwrap();
-        let fallback_rise = date.and_hms_opt(6, 0, 0).unwrap();
-        let fallback_set  = date.and_hms_opt(20, 0, 0).unwrap();
-        let sunrise = NaiveDateTime::parse_from_str(&d.sunrise[i], "%Y-%m-%dT%H:%M").unwrap_or(fallback_rise);
-        let sunset  = NaiveDateTime::parse_from_str(&d.sunset[i],  "%Y-%m-%dT%H:%M").unwrap_or(fallback_set);
-        (date, sunrise, sunset)
-    }).collect();
+    let solar: anyhow::Result<Vec<(NaiveDate, NaiveDateTime, NaiveDateTime)>> = d
+        .time
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            let date = NaiveDate::parse_from_str(t, "%Y-%m-%d")
+                .map_err(|e| anyhow::anyhow!("invalid date {:?}: {}", t, e))?;
+            let fallback_rise = date.and_hms_opt(6, 0, 0).unwrap();
+            let fallback_set = date.and_hms_opt(20, 0, 0).unwrap();
+            let sunrise = NaiveDateTime::parse_from_str(&d.sunrise[i], "%Y-%m-%dT%H:%M")
+                .unwrap_or(fallback_rise);
+            let sunset = NaiveDateTime::parse_from_str(&d.sunset[i], "%Y-%m-%dT%H:%M")
+                .unwrap_or(fallback_set);
+            Ok((date, sunrise, sunset))
+        })
+        .collect();
+    let solar = solar?;
 
     Ok((data, solar))
 }
 
-pub fn fetch_drone_weather(lat: f64, lng: f64, days: u32)
-    -> anyhow::Result<(String, Vec<crate::types::DroneHourlyData>, Vec<(NaiveDate, NaiveDateTime, NaiveDateTime)>)>
-{
+pub fn fetch_drone_weather(
+    lat: f64,
+    lng: f64,
+    days: u32,
+) -> anyhow::Result<(
+    String,
+    Vec<crate::types::DroneHourlyData>,
+    Vec<(NaiveDate, NaiveDateTime, NaiveDateTime)>,
+)> {
     let url = build_drone_url(lat, lng, days);
     let body = reqwest::blocking::get(&url)?.text()?;
     let (data, solar) = parse_drone(&body)?;
@@ -221,27 +275,51 @@ pub fn drone_day_summary(
 ) -> crate::types::DroneDaySummary {
     use crate::types::DroneDaySummary;
     let day: Vec<_> = data.iter().filter(|h| h.time.date() == date).collect();
-    let (sunrise, sunset) = solar.iter()
+    let (sunrise, sunset) = solar
+        .iter()
         .find(|(d, _, _)| *d == date)
         .map(|(_, r, s)| (*r, *s))
-        .unwrap_or_else(|| (
-            date.and_hms_opt(6, 0, 0).unwrap(),
-            date.and_hms_opt(20, 0, 0).unwrap(),
-        ));
+        .unwrap_or_else(|| {
+            (
+                date.and_hms_opt(6, 0, 0).unwrap(),
+                date.and_hms_opt(20, 0, 0).unwrap(),
+            )
+        });
     DroneDaySummary {
         date,
         sunrise,
         sunset,
         max_temp: day.iter().map(|h| h.temp).fold(f64::NEG_INFINITY, f64::max),
         min_temp: day.iter().map(|h| h.temp).fold(f64::INFINITY, f64::min),
-        max_precip_prob: day.iter().map(|h| h.precip_prob).fold(f64::NEG_INFINITY, f64::max),
+        max_precip_prob: day
+            .iter()
+            .map(|h| h.precip_prob)
+            .fold(f64::NEG_INFINITY, f64::max),
         total_precip: day.iter().map(|h| h.precip).sum(),
-        max_wind_10m:  day.iter().map(|h| h.wind_speed_10m).fold(f64::NEG_INFINITY, f64::max),
-        max_wind_80m:  day.iter().map(|h| h.wind_speed_80m).fold(f64::NEG_INFINITY, f64::max),
-        max_wind_120m: day.iter().map(|h| h.wind_speed_120m).fold(f64::NEG_INFINITY, f64::max),
-        max_wind_180m: day.iter().map(|h| h.wind_speed_180m).fold(f64::NEG_INFINITY, f64::max),
-        max_gust_10m:  day.iter().map(|h| h.wind_gust_10m).fold(f64::NEG_INFINITY, f64::max),
-        max_uv:        day.iter().map(|h| h.uv_index).fold(f64::NEG_INFINITY, f64::max),
+        max_wind_10m: day
+            .iter()
+            .map(|h| h.wind_speed_10m)
+            .fold(f64::NEG_INFINITY, f64::max),
+        max_wind_80m: day
+            .iter()
+            .map(|h| h.wind_speed_80m)
+            .fold(f64::NEG_INFINITY, f64::max),
+        max_wind_120m: day
+            .iter()
+            .map(|h| h.wind_speed_120m)
+            .fold(f64::NEG_INFINITY, f64::max),
+        max_wind_180m: day
+            .iter()
+            .map(|h| h.wind_speed_180m)
+            .fold(f64::NEG_INFINITY, f64::max),
+        max_gust_10m: day
+            .iter()
+            .map(|h| h.wind_gust_10m)
+            .fold(f64::NEG_INFINITY, f64::max),
+        max_uv: day
+            .iter()
+            .map(|h| h.uv_index)
+            .fold(f64::NEG_INFINITY, f64::max),
     }
 }
 
@@ -261,7 +339,9 @@ pub fn parse_historical_hourly(body: &str) -> anyhow::Result<Vec<HourlyData>> {
         wind_gusts_10m: Vec<Option<f64>>,
     }
     #[derive(Deserialize)]
-    struct Resp { hourly: H }
+    struct Resp {
+        hourly: H,
+    }
 
     let raw: serde_json::Value = serde_json::from_str(body)?;
     if let Some(reason) = raw.get("reason").and_then(|r| r.as_str()) {
@@ -269,28 +349,37 @@ pub fn parse_historical_hourly(body: &str) -> anyhow::Result<Vec<HourlyData>> {
     }
     let resp: Resp = serde_json::from_value(raw)?;
     let h = &resp.hourly;
-    let data = h.time.iter().enumerate().map(|(i, t)| {
-        let time = NaiveDateTime::parse_from_str(t, "%Y-%m-%dT%H:%M").unwrap();
-        let precip = h.precipitation[i].unwrap_or(0.0);
-        HourlyData {
-            time,
-            temp:          h.temperature_2m[i].unwrap_or(0.0),
-            apparent_temp: h.apparent_temperature[i].unwrap_or(0.0),
-            precip,
-            precip_prob:   if precip > 0.0 { 100.0 } else { 0.0 },
-            pressure:      h.pressure_msl[i].unwrap_or(0.0),
-            humidity:      h.relative_humidity_2m[i].unwrap_or(0.0),
-            cloud:         h.cloud_cover[i].unwrap_or(0.0),
-            wind_speed:    h.wind_speed_10m[i].unwrap_or(0.0),
-            wind_gust:     h.wind_gusts_10m[i].unwrap_or(0.0),
-        }
-    }).collect();
-    Ok(data)
+    let data: anyhow::Result<Vec<HourlyData>> = h
+        .time
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            let time = NaiveDateTime::parse_from_str(t, "%Y-%m-%dT%H:%M")
+                .map_err(|e| anyhow::anyhow!("invalid time {:?}: {}", t, e))?;
+            let precip = h.precipitation[i].unwrap_or(0.0);
+            Ok(HourlyData {
+                time,
+                temp: h.temperature_2m[i].unwrap_or(0.0),
+                apparent_temp: h.apparent_temperature[i].unwrap_or(0.0),
+                precip,
+                precip_prob: if precip > 0.0 { 100.0 } else { 0.0 },
+                pressure: h.pressure_msl[i].unwrap_or(0.0),
+                humidity: h.relative_humidity_2m[i].unwrap_or(0.0),
+                cloud: h.cloud_cover[i].unwrap_or(0.0),
+                wind_speed: h.wind_speed_10m[i].unwrap_or(0.0),
+                wind_gust: h.wind_gusts_10m[i].unwrap_or(0.0),
+            })
+        })
+        .collect();
+    Ok(data?)
 }
 
-pub fn fetch_historical_hourly(lat: f64, lng: f64, start: NaiveDate, end: NaiveDate)
-    -> anyhow::Result<(String, Vec<HourlyData>)>
-{
+pub fn fetch_historical_hourly(
+    lat: f64,
+    lng: f64,
+    start: NaiveDate,
+    end: NaiveDate,
+) -> anyhow::Result<(String, Vec<HourlyData>)> {
     let url = format!(
         "https://archive-api.open-meteo.com/v1/archive\
          ?latitude={lat}&longitude={lng}\
@@ -315,7 +404,9 @@ pub fn parse_historical_daily(body: &str) -> anyhow::Result<Vec<HistoricalDailyD
         wind_gusts_10m_max: Vec<Option<f64>>,
     }
     #[derive(Deserialize)]
-    struct Resp { daily: D }
+    struct Resp {
+        daily: D,
+    }
 
     let raw: serde_json::Value = serde_json::from_str(body)?;
     if let Some(reason) = raw.get("reason").and_then(|r| r.as_str()) {
@@ -323,23 +414,32 @@ pub fn parse_historical_daily(body: &str) -> anyhow::Result<Vec<HistoricalDailyD
     }
     let resp: Resp = serde_json::from_value(raw)?;
     let d = &resp.daily;
-    let data = d.time.iter().enumerate().map(|(i, t)| {
-        let date = NaiveDate::parse_from_str(t, "%Y-%m-%d").unwrap();
-        HistoricalDailyData {
-            date,
-            max_temp:   d.temperature_2m_max[i].unwrap_or(0.0),
-            min_temp:   d.temperature_2m_min[i].unwrap_or(0.0),
-            precip_sum: d.precipitation_sum[i].unwrap_or(0.0),
-            wind_max:   d.wind_speed_10m_max[i].unwrap_or(0.0),
-            gust_max:   d.wind_gusts_10m_max[i].unwrap_or(0.0),
-        }
-    }).collect();
-    Ok(data)
+    let data: anyhow::Result<Vec<HistoricalDailyData>> = d
+        .time
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            let date = NaiveDate::parse_from_str(t, "%Y-%m-%d")
+                .map_err(|e| anyhow::anyhow!("invalid date {:?}: {}", t, e))?;
+            Ok(HistoricalDailyData {
+                date,
+                max_temp: d.temperature_2m_max[i].unwrap_or(0.0),
+                min_temp: d.temperature_2m_min[i].unwrap_or(0.0),
+                precip_sum: d.precipitation_sum[i].unwrap_or(0.0),
+                wind_max: d.wind_speed_10m_max[i].unwrap_or(0.0),
+                gust_max: d.wind_gusts_10m_max[i].unwrap_or(0.0),
+            })
+        })
+        .collect();
+    Ok(data?)
 }
 
-pub fn fetch_historical_daily(lat: f64, lng: f64, start: NaiveDate, end: NaiveDate)
-    -> anyhow::Result<(String, Vec<HistoricalDailyData>)>
-{
+pub fn fetch_historical_daily(
+    lat: f64,
+    lng: f64,
+    start: NaiveDate,
+    end: NaiveDate,
+) -> anyhow::Result<(String, Vec<HistoricalDailyData>)> {
     let url = format!(
         "https://archive-api.open-meteo.com/v1/archive\
          ?latitude={lat}&longitude={lng}\
@@ -358,22 +458,37 @@ pub fn aggregate_monthly(days: &[HistoricalDailyData]) -> Vec<crate::types::Hist
     use std::collections::BTreeMap;
     let mut buckets: BTreeMap<(i32, u32), Vec<&HistoricalDailyData>> = BTreeMap::new();
     for d in days {
-        buckets.entry((d.date.year(), d.date.month())).or_default().push(d);
+        buckets
+            .entry((d.date.year(), d.date.month()))
+            .or_default()
+            .push(d);
     }
-    buckets.into_iter().map(|((year, month), ds)| {
-        let n = ds.len() as f64;
-        HistoricalMonthlyData {
-            year,
-            month,
-            avg_max_temp:     ds.iter().map(|d| d.max_temp).sum::<f64>() / n,
-            avg_min_temp:     ds.iter().map(|d| d.min_temp).sum::<f64>() / n,
-            extreme_max_temp: ds.iter().map(|d| d.max_temp).fold(f64::NEG_INFINITY, f64::max),
-            extreme_min_temp: ds.iter().map(|d| d.min_temp).fold(f64::INFINITY,     f64::min),
-            precip_sum:       ds.iter().map(|d| d.precip_sum).sum(),
-            wind_max:         ds.iter().map(|d| d.wind_max).fold(f64::NEG_INFINITY, f64::max),
-            gust_max:         ds.iter().map(|d| d.gust_max).fold(f64::NEG_INFINITY, f64::max),
-        }
-    }).collect()
+    buckets
+        .into_iter()
+        .map(|((year, month), ds)| {
+            let n = ds.len() as f64;
+            HistoricalMonthlyData {
+                year,
+                month,
+                avg_max_temp: ds.iter().map(|d| d.max_temp).sum::<f64>() / n,
+                avg_min_temp: ds.iter().map(|d| d.min_temp).sum::<f64>() / n,
+                extreme_max_temp: ds
+                    .iter()
+                    .map(|d| d.max_temp)
+                    .fold(f64::NEG_INFINITY, f64::max),
+                extreme_min_temp: ds.iter().map(|d| d.min_temp).fold(f64::INFINITY, f64::min),
+                precip_sum: ds.iter().map(|d| d.precip_sum).sum(),
+                wind_max: ds
+                    .iter()
+                    .map(|d| d.wind_max)
+                    .fold(f64::NEG_INFINITY, f64::max),
+                gust_max: ds
+                    .iter()
+                    .map(|d| d.gust_max)
+                    .fold(f64::NEG_INFINITY, f64::max),
+            }
+        })
+        .collect()
 }
 
 pub fn day_name(date: NaiveDate) -> &'static str {
@@ -391,7 +506,7 @@ pub fn day_name(date: NaiveDate) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{HourlyData, HistoricalDailyData};
+    use crate::types::{HistoricalDailyData, HourlyData};
 
     fn date(y: i32, m: u32, d: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(y, m, d).unwrap()
@@ -435,9 +550,30 @@ mod tests {
     #[test]
     fn aggregate_monthly_groups_correctly() {
         let days = vec![
-            HistoricalDailyData { date: date(2024, 1, 1), max_temp: 10.0, min_temp: 0.0, precip_sum: 1.0, wind_max: 20.0, gust_max: 30.0 },
-            HistoricalDailyData { date: date(2024, 1, 2), max_temp: 12.0, min_temp: 2.0, precip_sum: 0.0, wind_max: 15.0, gust_max: 25.0 },
-            HistoricalDailyData { date: date(2024, 2, 1), max_temp: 5.0,  min_temp: -5.0, precip_sum: 3.0, wind_max: 40.0, gust_max: 50.0 },
+            HistoricalDailyData {
+                date: date(2024, 1, 1),
+                max_temp: 10.0,
+                min_temp: 0.0,
+                precip_sum: 1.0,
+                wind_max: 20.0,
+                gust_max: 30.0,
+            },
+            HistoricalDailyData {
+                date: date(2024, 1, 2),
+                max_temp: 12.0,
+                min_temp: 2.0,
+                precip_sum: 0.0,
+                wind_max: 15.0,
+                gust_max: 25.0,
+            },
+            HistoricalDailyData {
+                date: date(2024, 2, 1),
+                max_temp: 5.0,
+                min_temp: -5.0,
+                precip_sum: 3.0,
+                wind_max: 40.0,
+                gust_max: 50.0,
+            },
         ];
         let monthly = aggregate_monthly(&days);
         assert_eq!(monthly.len(), 2);
@@ -461,27 +597,62 @@ mod tests {
 
     // ── day_summary ──────────────────────────────────────────────────────────
 
-    fn make_hour(y: i32, mo: u32, d: u32, h: u32, temp: f64, apparent: f64,
-                 precip: f64, precip_prob: f64, pressure: f64,
-                 humidity: f64, cloud: f64, wind: f64, gust: f64) -> HourlyData {
+    fn make_hour(
+        y: i32,
+        mo: u32,
+        d: u32,
+        h: u32,
+        temp: f64,
+        apparent: f64,
+        precip: f64,
+        precip_prob: f64,
+        pressure: f64,
+        humidity: f64,
+        cloud: f64,
+        wind: f64,
+        gust: f64,
+    ) -> HourlyData {
         HourlyData {
             time: dt(y, mo, d, h, 0),
-            temp, apparent_temp: apparent, precip, precip_prob,
-            pressure, humidity, cloud, wind_speed: wind, wind_gust: gust,
+            temp,
+            apparent_temp: apparent,
+            precip,
+            precip_prob,
+            pressure,
+            humidity,
+            cloud,
+            wind_speed: wind,
+            wind_gust: gust,
         }
     }
 
     #[test]
     fn day_summary_aggregates_correctly() {
         let data = vec![
-            make_hour(2024, 6, 1, 0,  10.0, 9.0,  0.0, 0.0,  1013.0, 70.0, 50.0, 10.0, 20.0),
-            make_hour(2024, 6, 1, 6,  15.0, 14.0, 1.0, 80.0, 1010.0, 80.0, 90.0, 20.0, 35.0),
-            make_hour(2024, 6, 1, 12, 25.0, 24.0, 0.5, 40.0, 1012.0, 60.0, 20.0, 15.0, 25.0),
-            make_hour(2024, 6, 2, 0,  12.0, 11.0, 0.0, 0.0,  1015.0, 65.0, 10.0, 5.0,  8.0),
+            make_hour(
+                2024, 6, 1, 0, 10.0, 9.0, 0.0, 0.0, 1013.0, 70.0, 50.0, 10.0, 20.0,
+            ),
+            make_hour(
+                2024, 6, 1, 6, 15.0, 14.0, 1.0, 80.0, 1010.0, 80.0, 90.0, 20.0, 35.0,
+            ),
+            make_hour(
+                2024, 6, 1, 12, 25.0, 24.0, 0.5, 40.0, 1012.0, 60.0, 20.0, 15.0, 25.0,
+            ),
+            make_hour(
+                2024, 6, 2, 0, 12.0, 11.0, 0.0, 0.0, 1015.0, 65.0, 10.0, 5.0, 8.0,
+            ),
         ];
         let solar = vec![
-            (date(2024, 6, 1), dt(2024, 6, 1, 5, 0), dt(2024, 6, 1, 21, 0)),
-            (date(2024, 6, 2), dt(2024, 6, 2, 5, 1), dt(2024, 6, 2, 21, 1)),
+            (
+                date(2024, 6, 1),
+                dt(2024, 6, 1, 5, 0),
+                dt(2024, 6, 1, 21, 0),
+            ),
+            (
+                date(2024, 6, 2),
+                dt(2024, 6, 2, 5, 1),
+                dt(2024, 6, 2, 21, 1),
+            ),
         ];
         let s = day_summary(&data, &solar, date(2024, 6, 1));
 
@@ -498,46 +669,77 @@ mod tests {
         assert!((s.avg_humidity - 70.0).abs() < 0.001);
         assert!((s.avg_cloud - 53.333).abs() < 0.01);
         assert_eq!(s.sunrise, dt(2024, 6, 1, 5, 0));
-        assert_eq!(s.sunset,  dt(2024, 6, 1, 21, 0));
+        assert_eq!(s.sunset, dt(2024, 6, 1, 21, 0));
     }
 
     #[test]
     fn day_summary_fallback_solar() {
         // No solar entry — should fall back to 06:00/20:00
-        let data = vec![make_hour(2024, 1, 1, 12, 5.0, 4.0, 0.0, 0.0, 1010.0, 75.0, 60.0, 8.0, 12.0)];
+        let data = vec![make_hour(
+            2024, 1, 1, 12, 5.0, 4.0, 0.0, 0.0, 1010.0, 75.0, 60.0, 8.0, 12.0,
+        )];
         let s = day_summary(&data, &[], date(2024, 1, 1));
         assert_eq!(s.sunrise, dt(2024, 1, 1, 6, 0));
-        assert_eq!(s.sunset,  dt(2024, 1, 1, 20, 0));
+        assert_eq!(s.sunset, dt(2024, 1, 1, 20, 0));
     }
 
     // ── drone_day_summary ────────────────────────────────────────────────────
 
-    fn make_drone_hour(y: i32, mo: u32, d: u32, h: u32,
-                       temp: f64, w10: f64, w80: f64, w120: f64, w180: f64,
-                       gust: f64, uv: f64, precip: f64, prob: f64)
-        -> crate::types::DroneHourlyData
-    {
+    fn make_drone_hour(
+        y: i32,
+        mo: u32,
+        d: u32,
+        h: u32,
+        temp: f64,
+        w10: f64,
+        w80: f64,
+        w120: f64,
+        w180: f64,
+        gust: f64,
+        uv: f64,
+        precip: f64,
+        prob: f64,
+    ) -> crate::types::DroneHourlyData {
         crate::types::DroneHourlyData {
             time: dt(y, mo, d, h, 0),
-            temp, apparent_temp: temp - 1.0,
-            precip_prob: prob, precip,
-            wind_speed_10m: w10, wind_speed_80m: w80,
-            wind_speed_120m: w120, wind_speed_180m: w180,
-            wind_dir_10m: 180.0, wind_dir_80m: 190.0,
-            wind_dir_120m: 200.0, wind_dir_180m: 210.0,
-            wind_gust_10m: gust, uv_index: uv,
+            temp,
+            apparent_temp: temp - 1.0,
+            precip_prob: prob,
+            precip,
+            wind_speed_10m: w10,
+            wind_speed_80m: w80,
+            wind_speed_120m: w120,
+            wind_speed_180m: w180,
+            wind_dir_10m: 180.0,
+            wind_dir_80m: 190.0,
+            wind_dir_120m: 200.0,
+            wind_dir_180m: 210.0,
+            wind_gust_10m: gust,
+            uv_index: uv,
         }
     }
 
     #[test]
     fn drone_day_summary_aggregates_correctly() {
         let data = vec![
-            make_drone_hour(2024, 7, 1, 0,  20.0, 5.0,  10.0, 12.0, 14.0, 18.0, 0.0,  0.0, 0.0),
-            make_drone_hour(2024, 7, 1, 6,  22.0, 15.0, 20.0, 22.0, 25.0, 30.0, 3.5,  0.5, 60.0),
-            make_drone_hour(2024, 7, 1, 12, 28.0, 10.0, 18.0, 20.0, 22.0, 25.0, 7.0,  0.2, 30.0),
-            make_drone_hour(2024, 7, 2, 0,  18.0, 8.0,  12.0, 14.0, 16.0, 20.0, 0.0,  0.0, 0.0),
+            make_drone_hour(
+                2024, 7, 1, 0, 20.0, 5.0, 10.0, 12.0, 14.0, 18.0, 0.0, 0.0, 0.0,
+            ),
+            make_drone_hour(
+                2024, 7, 1, 6, 22.0, 15.0, 20.0, 22.0, 25.0, 30.0, 3.5, 0.5, 60.0,
+            ),
+            make_drone_hour(
+                2024, 7, 1, 12, 28.0, 10.0, 18.0, 20.0, 22.0, 25.0, 7.0, 0.2, 30.0,
+            ),
+            make_drone_hour(
+                2024, 7, 2, 0, 18.0, 8.0, 12.0, 14.0, 16.0, 20.0, 0.0, 0.0, 0.0,
+            ),
         ];
-        let solar = vec![(date(2024, 7, 1), dt(2024, 7, 1, 5, 10), dt(2024, 7, 1, 21, 5))];
+        let solar = vec![(
+            date(2024, 7, 1),
+            dt(2024, 7, 1, 5, 10),
+            dt(2024, 7, 1, 21, 5),
+        )];
         let s = drone_day_summary(&data, &solar, date(2024, 7, 1));
 
         assert_eq!(s.date, date(2024, 7, 1));
@@ -552,7 +754,7 @@ mod tests {
         assert!((s.total_precip - 0.7).abs() < 0.001);
         assert_eq!(s.max_precip_prob, 60.0);
         assert_eq!(s.sunrise, dt(2024, 7, 1, 5, 10));
-        assert_eq!(s.sunset,  dt(2024, 7, 1, 21, 5));
+        assert_eq!(s.sunset, dt(2024, 7, 1, 21, 5));
     }
 
     // ── parse_forecast (fixture) ──────────────────────────────────────────────
@@ -561,7 +763,11 @@ mod tests {
     fn parse_forecast_fixture() {
         let body = include_str!("../tests/fixtures/forecast.json");
         let (data, solar) = parse_forecast(body).expect("parse failed");
-        assert_eq!(data.len(), 24, "expected 24 hourly records for 1-day forecast");
+        assert_eq!(
+            data.len(),
+            24,
+            "expected 24 hourly records for 1-day forecast"
+        );
         assert_eq!(solar.len(), 1);
         // Spot-check first record: temp should be a plausible value
         assert!(data[0].temp > -50.0 && data[0].temp < 60.0);

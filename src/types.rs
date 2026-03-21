@@ -1,6 +1,6 @@
 use chrono::{NaiveDate, NaiveDateTime};
 
-pub const VERSION: &str = "0.8";
+pub const VERSION: &str = "0.9";
 
 #[cfg(test)]
 mod tests {
@@ -8,7 +8,7 @@ mod tests {
 
     #[test]
     fn version_is_current() {
-        assert_eq!(VERSION, "0.8");
+        assert_eq!(VERSION, "0.9");
     }
 
     #[test]
@@ -42,11 +42,11 @@ mod tests {
 /// Display theme — controls the OKLCH hue sweep used throughout.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Theme {
-    Blue,    // cyan(200°) → indigo(280°)           --i-am-blue
-    Warm,    // indigo(280°) → red(360°) → orange    [default]
-    Rainbow, // cyan(200°) → indigo → red → orange   --color-me
-    Classic, // blue(264°) → cyan → green → yellow → orange → red(27°)  --classic-colors
-    Rainforest,      // cyan(200°) → green → lime(120°)      --rainforest
+    Blue,       // cyan(200°) → indigo(280°)           --i-am-blue
+    Warm,       // indigo(280°) → red(360°) → orange    [default]
+    Rainbow,    // cyan(200°) → indigo → red → orange   --color-me
+    Classic,    // blue(264°) → cyan → green → yellow → orange → red(27°)  --classic-colors
+    Rainforest, // cyan(200°) → green → lime(120°)      --rainforest
 }
 
 /// Unit system for display.
@@ -58,20 +58,31 @@ pub enum Units {
 }
 
 impl Units {
-    pub fn use_fahrenheit(self) -> bool { self == Units::Imperial }
-    pub fn use_mph(self)        -> bool { self != Units::Metric }
-    pub fn use_inches(self)     -> bool { self == Units::Imperial }
-    pub fn use_inhg(self)       -> bool { self == Units::Imperial }
-}
+    pub fn use_fahrenheit(self) -> bool {
+        self == Units::Imperial
+    }
+    pub fn use_mph(self) -> bool {
+        self != Units::Metric
+    }
+    pub fn use_inches(self) -> bool {
+        self == Units::Imperial
+    }
+    pub fn use_inhg(self) -> bool {
+        self == Units::Imperial
+    }
 
-/// Forecast mode — Standard is the only implemented mode;
-/// Drone and Pilot are reserved for future profiles.
-#[derive(Clone, Copy, PartialEq)]
-#[allow(dead_code)]
-pub enum Mode {
-    Standard,
-    Drone,
-    Pilot,
+    pub fn temp_label(self) -> &'static str {
+        if self.use_fahrenheit() { "F" } else { "C" }
+    }
+    pub fn wind_label(self) -> &'static str {
+        if self.use_mph() { "mph" } else { "km/h" }
+    }
+    pub fn rain_label(self) -> &'static str {
+        if self.use_inches() { "in" } else { "mm" }
+    }
+    pub fn pressure_label(self) -> &'static str {
+        if self.use_inhg() { "inHg" } else { "hPa" }
+    }
 }
 
 #[derive(Debug)]

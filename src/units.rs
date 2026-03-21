@@ -1,20 +1,34 @@
-pub fn c_to_f(v: f64) -> f64      { v * 9.0 / 5.0 + 32.0 }
-pub fn kmh_to_mph(v: f64) -> f64   { v * 0.621371 }
-pub fn mm_to_in(v: f64) -> f64     { v / 25.4 }
-pub fn hpa_to_inhg(v: f64) -> f64  { v * 0.02953 }
+pub fn c_to_f(v: f64) -> f64 {
+    v * 9.0 / 5.0 + 32.0
+}
+pub fn kmh_to_mph(v: f64) -> f64 {
+    v * 0.621371
+}
+pub fn mm_to_in(v: f64) -> f64 {
+    v / 25.4
+}
+pub fn hpa_to_inhg(v: f64) -> f64 {
+    v * 0.02953
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn c_to_f_freezing() { assert_eq!(c_to_f(0.0), 32.0); }
+    fn c_to_f_freezing() {
+        assert_eq!(c_to_f(0.0), 32.0);
+    }
 
     #[test]
-    fn c_to_f_boiling() { assert_eq!(c_to_f(100.0), 212.0); }
+    fn c_to_f_boiling() {
+        assert_eq!(c_to_f(100.0), 212.0);
+    }
 
     #[test]
-    fn c_to_f_negative_40_crossover() { assert_eq!(c_to_f(-40.0), -40.0); }
+    fn c_to_f_negative_40_crossover() {
+        assert_eq!(c_to_f(-40.0), -40.0);
+    }
 
     #[test]
     fn kmh_to_mph_hundred() {

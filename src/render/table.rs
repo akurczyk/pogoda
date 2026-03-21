@@ -6,7 +6,10 @@ use ratatui::{
 use std::io::{self, Write as IoWrite};
 
 use crate::colors::{cloud_color, palette, pressure_color, temp_color, wind_color};
-use crate::render::{bars::{rain_block_cell, temp_bar, value_bar, wind_bar}, emit_span};
+use crate::render::{
+    bars::{rain_block_cell, temp_bar, value_bar, wind_bar},
+    emit_span,
+};
 use crate::types::{DaySummary, HourlyData, Theme, Units};
 use crate::units::{c_to_f, hpa_to_inhg, kmh_to_mph, mm_to_in};
 use crate::weather::day_name;
@@ -14,46 +17,116 @@ use crate::weather::day_name;
 /// (header, label_w, default_bar_w)
 pub const COL_DEFS: &[(&str, usize, usize)] = &[
     ("TEMP/FEEL °C", 11, 9),
-    ("CLOUD %",       3, 10),
-    ("RAIN %→/mm↑",   9, 10),
-    ("WIND km/h",    11,  9),
-    ("PRESSURE hPa",  6,  8),
-    ("HUMIDITY %",    3, 10),
+    ("CLOUD %", 3, 10),
+    ("RAIN %→/mm↑", 9, 10),
+    ("WIND km/h", 11, 9),
+    ("PRESSURE hPa", 6, 8),
+    ("HUMIDITY %", 3, 10),
 ];
 
 pub fn col_title(i: usize, units: Units, historical: bool) -> &'static str {
     match i {
-        0 => if units.use_fahrenheit() { "TEMP/FEEL °F" } else { "TEMP/FEEL °C" },
-        2 => if historical             { if units.use_inches() { "RAIN in" } else { "RAIN mm" } }
-             else                      { if units.use_inches() { "RAIN %→/in↑" } else { "RAIN %→/mm↑" } },
-        3 => if units.use_mph()        { "WIND mph"     } else { "WIND km/h"    },
-        4 => if units.use_inhg()       { "PRES inHg"    } else { "PRESSURE hPa" },
+        0 => {
+            if units.use_fahrenheit() {
+                "TEMP/FEEL °F"
+            } else {
+                "TEMP/FEEL °C"
+            }
+        }
+        2 => {
+            if historical {
+                if units.use_inches() {
+                    "RAIN in"
+                } else {
+                    "RAIN mm"
+                }
+            } else {
+                if units.use_inches() {
+                    "RAIN %→/in↑"
+                } else {
+                    "RAIN %→/mm↑"
+                }
+            }
+        }
+        3 => {
+            if units.use_mph() {
+                "WIND mph"
+            } else {
+                "WIND km/h"
+            }
+        }
+        4 => {
+            if units.use_inhg() {
+                "PRES inHg"
+            } else {
+                "PRESSURE hPa"
+            }
+        }
         _ => COL_DEFS[i].0,
     }
 }
 
 /// Per-day summary column (label 10 chars, value 7 chars).
 pub fn summary_parts(s: &DaySummary, units: Units) -> Vec<(String, String)> {
-    let t = |v: f64| if units.use_fahrenheit() { format!("{:>5.1}°F", c_to_f(v))       } else { format!("{:>5.1}°C", v)     };
-    let w = |v: f64| if units.use_mph()         { format!("{:>4.0}mph", kmh_to_mph(v))   } else { format!("{:>3.0}km/h", v)   };
-    let r = |v: f64| if units.use_inches()       { format!("{:>5.2}in", mm_to_in(v))      } else { format!("{:>5.1}mm", v)     };
-    let p = |v: f64| if units.use_inhg()         { format!("{:>5.2}in", hpa_to_inhg(v))   } else { format!("{:>4.0}hPa", v)    };
+    let t = |v: f64| {
+        if units.use_fahrenheit() {
+            format!("{:>5.1}°F", c_to_f(v))
+        } else {
+            format!("{:>5.1}°C", v)
+        }
+    };
+    let w = |v: f64| {
+        if units.use_mph() {
+            format!("{:>4.0}mph", kmh_to_mph(v))
+        } else {
+            format!("{:>3.0}km/h", v)
+        }
+    };
+    let r = |v: f64| {
+        if units.use_inches() {
+            format!("{:>5.2}in", mm_to_in(v))
+        } else {
+            format!("{:>5.1}mm", v)
+        }
+    };
+    let p = |v: f64| {
+        if units.use_inhg() {
+            format!("{:>5.2}in", hpa_to_inhg(v))
+        } else {
+            format!("{:>4.0}hPa", v)
+        }
+    };
     vec![
         (format!("{}", s.date.format("%Y-%m-%d")), String::new()),
         (format!("{}", day_name(s.date)), String::new()),
-        (format!("{:<10}", "Sunrise:"),   format!("{:>7}", s.sunrise.format("%H:%M"))),
-        (format!("{:<10}", "Sunset:"),    format!("{:>7}", s.sunset.format("%H:%M"))),
-        (format!("{:<10}", "Temp max:"),  t(s.max_temp)),
-        (format!("{:<10}", "Temp min:"),  t(s.min_temp)),
-        (format!("{:<10}", "Feel max:"),  t(s.max_apparent)),
-        (format!("{:<10}", "Feel min:"),  t(s.min_apparent)),
-        (format!("{:<10}", "Cloud avg:"), format!("{:>6.0}%", s.avg_cloud)),
-        (format!("{:<10}", "Rain prob:"), format!("{:>6.0}%", s.max_precip_prob)),
-        (format!("{:<10}", "Rain sum:"),  r(s.total_precip)),
-        (format!("{:<10}", "Wind:"),      w(s.max_wind_speed)),
-        (format!("{:<10}", "Gusts:"),     w(s.max_wind_gust)),
-        (format!("{:<10}", "Pressure:"),  p(s.avg_pressure)),
-        (format!("{:<10}", "Humidity:"),  format!("{:>6.0}%", s.avg_humidity)),
+        (
+            format!("{:<10}", "Sunrise:"),
+            format!("{:>7}", s.sunrise.format("%H:%M")),
+        ),
+        (
+            format!("{:<10}", "Sunset:"),
+            format!("{:>7}", s.sunset.format("%H:%M")),
+        ),
+        (format!("{:<10}", "Temp max:"), t(s.max_temp)),
+        (format!("{:<10}", "Temp min:"), t(s.min_temp)),
+        (format!("{:<10}", "Feel max:"), t(s.max_apparent)),
+        (format!("{:<10}", "Feel min:"), t(s.min_apparent)),
+        (
+            format!("{:<10}", "Cloud avg:"),
+            format!("{:>6.0}%", s.avg_cloud),
+        ),
+        (
+            format!("{:<10}", "Rain prob:"),
+            format!("{:>6.0}%", s.max_precip_prob),
+        ),
+        (format!("{:<10}", "Rain sum:"), r(s.total_precip)),
+        (format!("{:<10}", "Wind:"), w(s.max_wind_speed)),
+        (format!("{:<10}", "Gusts:"), w(s.max_wind_gust)),
+        (format!("{:<10}", "Pressure:"), p(s.avg_pressure)),
+        (
+            format!("{:<10}", "Humidity:"),
+            format!("{:>6.0}%", s.avg_humidity),
+        ),
     ]
 }
 
@@ -68,23 +141,53 @@ pub fn print_table(
     mono: bool,
     historical: bool,
 ) -> io::Result<()> {
-    use chrono::NaiveDate;
-    let temp_min = data.iter().map(|h| h.apparent_temp.min(h.temp)).fold(f64::INFINITY, f64::min) - 2.0;
-    let temp_max = data.iter().map(|h| h.apparent_temp.max(h.temp)).fold(f64::NEG_INFINITY, f64::max) + 2.0;
-    let pressure_min = data.iter().map(|h| h.pressure).fold(f64::INFINITY, f64::min) - 2.0;
-    let pressure_max = data.iter().map(|h| h.pressure).fold(f64::NEG_INFINITY, f64::max) + 2.0;
-    let wind_max = data.iter().map(|h| h.wind_gust.max(h.wind_speed)).fold(0.0_f64, f64::max) + 2.0;
-    let max_mm   = data.iter().map(|h| h.precip).fold(0.0_f64, f64::max).max(0.1);
+    use chrono::{NaiveDate, NaiveDateTime};
+    let temp_min = data
+        .iter()
+        .map(|h| h.apparent_temp.min(h.temp))
+        .fold(f64::INFINITY, f64::min)
+        - 2.0;
+    let temp_max = data
+        .iter()
+        .map(|h| h.apparent_temp.max(h.temp))
+        .fold(f64::NEG_INFINITY, f64::max)
+        + 2.0;
+    let pressure_min = data
+        .iter()
+        .map(|h| h.pressure)
+        .fold(f64::INFINITY, f64::min)
+        - 2.0;
+    let pressure_max = data
+        .iter()
+        .map(|h| h.pressure)
+        .fold(f64::NEG_INFINITY, f64::max)
+        + 2.0;
+    let wind_max = data
+        .iter()
+        .map(|h| h.wind_gust.max(h.wind_speed))
+        .fold(0.0_f64, f64::max)
+        + 2.0;
+    let max_mm = data
+        .iter()
+        .map(|h| h.precip)
+        .fold(0.0_f64, f64::max)
+        .max(0.1);
 
-    let day_w:  usize = 18;
+    let day_w: usize = 18;
     let hour_w: usize = 6;
     const MIN_BAR: usize = 3;
 
     let mut n_cols = COL_DEFS.len();
     loop {
-        let needed: usize = day_w + hour_w
-            + COL_DEFS[..n_cols].iter().map(|(_, lw, _)| 1 + lw + 1 + MIN_BAR).sum::<usize>();
-        if needed <= term_w || n_cols == 1 { break; }
+        let needed: usize = day_w
+            + hour_w
+            + COL_DEFS[..n_cols]
+                .iter()
+                .map(|(_, lw, _)| 1 + lw + 1 + MIN_BAR)
+                .sum::<usize>();
+        if needed <= term_w || n_cols == 1 {
+            break;
+        }
         n_cols -= 1;
     }
 
@@ -92,11 +195,14 @@ pub fn print_table(
     let fixed: usize = day_w + hour_w + active.iter().map(|(_, lw, _)| 1 + lw + 1).sum::<usize>();
     let available = term_w.saturating_sub(fixed);
     let default_total: usize = active.iter().map(|(_, _, bw)| bw).sum();
-    let mut bar_ws: Vec<usize> = active.iter().map(|(_, _, bw)| {
-        ((bw * available) / default_total.max(1)).max(MIN_BAR)
-    }).collect();
+    let mut bar_ws: Vec<usize> = active
+        .iter()
+        .map(|(_, _, bw)| ((bw * available) / default_total.max(1)).max(MIN_BAR))
+        .collect();
     let used: usize = fixed + bar_ws.iter().sum::<usize>();
-    if used < term_w { bar_ws[n_cols - 1] += term_w - used; }
+    if used < term_w {
+        bar_ws[n_cols - 1] += term_w - used;
+    }
 
     let sep_w: usize = fixed + bar_ws.iter().sum::<usize>();
     let hdr = Style::default().add_modifier(Modifier::BOLD);
@@ -112,15 +218,16 @@ pub fn print_table(
         Span::raw(format!("{:hour_w$}", "")),
     ];
     for (i, (_, lw, _)) in active.iter().enumerate() {
-        hdr_spans.push(Span::styled(hdr_col(*lw, bar_ws[i], col_title(i, units, historical)), hdr));
+        hdr_spans.push(Span::styled(
+            hdr_col(*lw, bar_ws[i], col_title(i, units, historical)),
+            hdr,
+        ));
     }
     lines.push(Line::from(hdr_spans));
     lines.push(Line::from(Span::styled("─".repeat(sep_w), dim)));
 
-    let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()
-        .and_hms_opt(0, 0, 0).unwrap();
-    let mut current_sunrise = epoch;
-    let mut current_sunset  = epoch;
+    let mut current_sunrise: Option<NaiveDateTime> = None;
+    let mut current_sunset: Option<NaiveDateTime> = None;
 
     let mut day_summary_idx: usize;
     let mut current_date: Option<chrono::NaiveDate> = None;
@@ -138,8 +245,8 @@ pub fn print_table(
             current_date = Some(date);
             day_row_count = 0;
             day_summary_idx = dates.iter().position(|d| *d == date).unwrap_or(0);
-            current_sunrise = summaries[day_summary_idx].sunrise;
-            current_sunset  = summaries[day_summary_idx].sunset;
+            current_sunrise = Some(summaries[day_summary_idx].sunrise);
+            current_sunset = Some(summaries[day_summary_idx].sunset);
             day_parts_cache = summary_parts(&summaries[day_summary_idx], units);
         }
 
@@ -147,18 +254,29 @@ pub fn print_table(
         let mut spans: Vec<Span> = if day_row_count < day_parts_cache.len() {
             let (label, value) = &day_parts_cache[day_row_count];
             if day_row_count == 1 {
-                vec![Span::styled(format!("{:<day_w$}", label), Style::default().fg(palette(0.0, theme)).add_modifier(Modifier::BOLD))]
+                vec![Span::styled(
+                    format!("{:<day_w$}", label),
+                    Style::default()
+                        .fg(palette(0.0, theme))
+                        .add_modifier(Modifier::BOLD),
+                )]
             } else if value.is_empty() {
                 vec![Span::styled(format!("{:<day_w$}", label), bold)]
             } else {
-                vec![Span::raw(label.clone()), Span::styled(value.clone(), bold), Span::raw(" ")]
+                vec![
+                    Span::raw(label.clone()),
+                    Span::styled(value.clone(), bold),
+                    Span::raw(" "),
+                ]
             }
         } else {
             vec![Span::raw(format!("{:<day_w$}", ""))]
         };
         day_row_count += 1;
 
-        let h_style = if hd.time >= current_sunrise && hd.time < current_sunset {
+        let h_style = if current_sunrise.is_some_and(|sr| hd.time >= sr)
+            && current_sunset.is_some_and(|ss| hd.time < ss)
+        {
             Style::default().fg(palette(0.5, theme))
         } else {
             Style::default().fg(Color::DarkGray)
@@ -175,17 +293,29 @@ pub fn print_table(
                         (hd.temp, hd.apparent_temp)
                     };
                     let c = temp_color(hd.temp, theme);
-                    (Span::styled(format!("{:>5.1}/{:>5.1}", dt, df), Style::default().fg(c)),
-                     temp_bar(hd.temp, hd.apparent_temp, temp_min, temp_max, bw, theme))
+                    (
+                        Span::styled(format!("{:>5.1}/{:>5.1}", dt, df), Style::default().fg(c)),
+                        temp_bar(hd.temp, hd.apparent_temp, temp_min, temp_max, bw, theme),
+                    )
                 }
                 1 => {
                     let c = cloud_color(hd.cloud);
-                    (Span::styled(format!("{:>3.0}", hd.cloud), Style::default().fg(c)),
-                     value_bar(hd.cloud, 0.0, 100.0, bw, c))
+                    (
+                        Span::styled(format!("{:>3.0}", hd.cloud), Style::default().fg(c)),
+                        value_bar(hd.cloud, 0.0, 100.0, bw, c),
+                    )
                 }
                 2 => {
-                    let mm_disp  = if units.use_inches() { mm_to_in(hd.precip) } else { hd.precip };
-                    let max_disp = if units.use_inches() { mm_to_in(max_mm) }    else { max_mm };
+                    let mm_disp = if units.use_inches() {
+                        mm_to_in(hd.precip)
+                    } else {
+                        hd.precip
+                    };
+                    let max_disp = if units.use_inches() {
+                        mm_to_in(max_mm)
+                    } else {
+                        max_mm
+                    };
                     let c = palette((mm_disp / max_disp).clamp(0.0, 1.0), theme);
                     if historical {
                         let label = if units.use_inches() {
@@ -193,19 +323,23 @@ pub fn print_table(
                         } else {
                             format!("{:>8.1}", mm_disp)
                         };
-                        (Span::styled(label, Style::default().fg(c)),
-                         value_bar(mm_disp, 0.0, max_disp, bw, c))
+                        (
+                            Span::styled(label, Style::default().fg(c)),
+                            value_bar(mm_disp, 0.0, max_disp, bw, c),
+                        )
                     } else {
                         let prob_t = hd.precip_prob / 100.0;
-                        let mm_t   = (hd.precip / max_mm).clamp(0.0, 1.0);
+                        let mm_t = (hd.precip / max_mm).clamp(0.0, 1.0);
                         let c = palette((prob_t * 0.5 + mm_t * 0.5).clamp(0.0, 1.0), theme);
                         let label = if units.use_inches() {
                             format!("{:>3.0}%/{:>4.2}", hd.precip_prob, mm_disp)
                         } else {
                             format!("{:>3.0}%/{:>4.1}", hd.precip_prob, mm_disp)
                         };
-                        (Span::styled(label, Style::default().fg(c)),
-                         rain_block_cell(hd.precip_prob, mm_disp, max_disp, bw, c))
+                        (
+                            Span::styled(label, Style::default().fg(c)),
+                            rain_block_cell(hd.precip_prob, mm_disp, max_disp, bw, c),
+                        )
                     }
                 }
                 3 => {
@@ -215,8 +349,10 @@ pub fn print_table(
                         (hd.wind_speed, hd.wind_gust)
                     };
                     let c = wind_color(hd.wind_speed, theme);
-                    (Span::styled(format!("{:>5.1}/{:>5.1}", ds, dg), Style::default().fg(c)),
-                     wind_bar(hd.wind_speed, hd.wind_gust, 0.0, wind_max, bw, theme))
+                    (
+                        Span::styled(format!("{:>5.1}/{:>5.1}", ds, dg), Style::default().fg(c)),
+                        wind_bar(hd.wind_speed, hd.wind_gust, 0.0, wind_max, bw, theme),
+                    )
                 }
                 4 => {
                     let c = pressure_color(hd.pressure, theme);
@@ -225,13 +361,17 @@ pub fn print_table(
                     } else {
                         format!("{:>6.0}", hd.pressure)
                     };
-                    (Span::styled(disp, Style::default().fg(c)),
-                     value_bar(hd.pressure, pressure_min, pressure_max, bw, c))
+                    (
+                        Span::styled(disp, Style::default().fg(c)),
+                        value_bar(hd.pressure, pressure_min, pressure_max, bw, c),
+                    )
                 }
                 _ => {
                     let c = palette(hd.humidity / 100.0, theme);
-                    (Span::styled(format!("{:>3.0}", hd.humidity), Style::default().fg(c)),
-                     value_bar(hd.humidity, 0.0, 100.0, bw, c))
+                    (
+                        Span::styled(format!("{:>3.0}", hd.humidity), Style::default().fg(c)),
+                        value_bar(hd.humidity, 0.0, 100.0, bw, c),
+                    )
                 }
             };
             spans.push(Span::raw(" "));

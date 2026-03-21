@@ -1,6 +1,11 @@
 use std::io::{self, Write as IoWrite};
 
-pub fn print_banner(out: &mut impl IoWrite, main_rgb: (u8, u8, u8), shadow_rgb: (u8, u8, u8), mono: bool) -> io::Result<()> {
+pub fn print_banner(
+    out: &mut impl IoWrite,
+    main_rgb: (u8, u8, u8),
+    shadow_rgb: (u8, u8, u8),
+    mono: bool,
+) -> io::Result<()> {
     // 5-row pixel font, 4 cols per letter; 1=filled (██) 0=empty
     // P         O         G         O         D         A
     let font: &[&[u8]] = &[
@@ -22,7 +27,7 @@ pub fn print_banner(out: &mut impl IoWrite, main_rgb: (u8, u8, u8), shadow_rgb: 
         write!(out, "  ")?;
         for letter in font {
             for dcol in 0..5usize {
-                let main   = pixel(letter, drow, dcol);
+                let main = pixel(letter, drow, dcol);
                 let shadow = dcol > 0 && pixel(letter, drow, dcol - 1);
                 if main {
                     if mono {
