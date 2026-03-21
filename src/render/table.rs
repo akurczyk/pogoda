@@ -141,7 +141,7 @@ pub fn print_table(
     mono: bool,
     historical: bool,
 ) -> io::Result<()> {
-    use chrono::{NaiveDate, NaiveDateTime};
+    use chrono::NaiveDateTime;
     let temp_min = data
         .iter()
         .map(|h| h.apparent_temp.min(h.temp))

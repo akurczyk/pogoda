@@ -214,7 +214,7 @@ pub fn print_drone_table(
     theme: Theme,
     mono: bool,
 ) -> io::Result<()> {
-    use chrono::{NaiveDate, NaiveDateTime};
+    use chrono::NaiveDateTime;
     if data.is_empty() {
         return Ok(());
     }
