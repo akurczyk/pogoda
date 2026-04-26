@@ -3,6 +3,7 @@ use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span},
 };
+use rust_i18n::t;
 use std::io::{self, Write as IoWrite};
 
 use crate::colors::{cloud_color, palette, pressure_color, temp_color, wind_color};
@@ -24,50 +25,57 @@ pub const COL_DEFS: &[(&str, usize, usize)] = &[
     ("HUMIDITY %", 3, 10),
 ];
 
-pub fn col_title(i: usize, units: Units, historical: bool) -> &'static str {
+/// All summary-row label keys used by `summary_parts`.
+const SUMMARY_KEYS: &[&str] = &[
+    "summary.sunrise",
+    "summary.sunset",
+    "summary.temp_max",
+    "summary.temp_min",
+    "summary.feel_max",
+    "summary.feel_min",
+    "summary.cloud_avg",
+    "summary.rain_prob",
+    "summary.rain_sum",
+    "summary.wind",
+    "summary.gusts",
+    "summary.pressure",
+    "summary.humidity",
+];
+
+/// Width of the formatted value half of a summary row (e.g. " 58.3°F", "   58%", "  0.00in").
+/// Every value in `summary_parts` is padded to exactly this many display chars.
+const SUMMARY_VALUE_W: usize = 7;
+
+/// Char-count of the longest localized summary label for the active locale.
+/// Used to size the day-summary column so translated labels don't push the table out of alignment.
+fn summary_label_w() -> usize {
+    SUMMARY_KEYS
+        .iter()
+        .map(|k| t!(*k).chars().count())
+        .max()
+        .unwrap_or(0)
+}
+
+pub fn col_title(i: usize, units: Units, historical: bool) -> String {
     match i {
-        0 => {
-            if units.use_fahrenheit() {
-                "TEMP/FEEL °F"
-            } else {
-                "TEMP/FEEL °C"
-            }
-        }
+        0 => format!("{} °{}", t!("col.temp_feel"), units.temp_label()),
+        1 => t!("col.cloud").to_string(),
         2 => {
             if historical {
-                if units.use_inches() {
-                    "RAIN in"
-                } else {
-                    "RAIN mm"
-                }
+                format!("{} {}", t!("col.rain"), units.rain_label())
             } else {
-                if units.use_inches() {
-                    "RAIN %→/in↑"
-                } else {
-                    "RAIN %→/mm↑"
-                }
+                format!("{} %→/{}↑", t!("col.rain"), units.rain_label())
             }
         }
-        3 => {
-            if units.use_mph() {
-                "WIND mph"
-            } else {
-                "WIND km/h"
-            }
-        }
-        4 => {
-            if units.use_inhg() {
-                "PRES inHg"
-            } else {
-                "PRESSURE hPa"
-            }
-        }
-        _ => COL_DEFS[i].0,
+        3 => format!("{} {}", t!("col.wind"), units.wind_label()),
+        4 => format!("{} {}", t!("col.pressure"), units.pressure_label()),
+        5 => t!("col.humidity").to_string(),
+        _ => COL_DEFS[i].0.to_string(),
     }
 }
 
-/// Per-day summary column (label 10 chars, value 7 chars).
-pub fn summary_parts(s: &DaySummary, units: Units) -> Vec<(String, String)> {
+/// Per-day summary column. Labels padded to `label_w`, values to `SUMMARY_VALUE_W`.
+pub fn summary_parts(s: &DaySummary, units: Units, label_w: usize) -> Vec<(String, String)> {
     let t = |v: f64| {
         if units.use_fahrenheit() {
             format!("{:>5.1}°F", c_to_f(v))
@@ -96,37 +104,32 @@ pub fn summary_parts(s: &DaySummary, units: Units) -> Vec<(String, String)> {
             format!("{:>4.0}hPa", v)
         }
     };
+    let lbl = |k: &str| format!("{:<label_w$}", t!(k));
     vec![
         (format!("{}", s.date.format("%Y-%m-%d")), String::new()),
-        (format!("{}", day_name(s.date)), String::new()),
+        (day_name(s.date), String::new()),
         (
-            format!("{:<10}", "Sunrise:"),
+            lbl("summary.sunrise"),
             format!("{:>7}", s.sunrise.format("%H:%M")),
         ),
         (
-            format!("{:<10}", "Sunset:"),
+            lbl("summary.sunset"),
             format!("{:>7}", s.sunset.format("%H:%M")),
         ),
-        (format!("{:<10}", "Temp max:"), t(s.max_temp)),
-        (format!("{:<10}", "Temp min:"), t(s.min_temp)),
-        (format!("{:<10}", "Feel max:"), t(s.max_apparent)),
-        (format!("{:<10}", "Feel min:"), t(s.min_apparent)),
+        (lbl("summary.temp_max"), t(s.max_temp)),
+        (lbl("summary.temp_min"), t(s.min_temp)),
+        (lbl("summary.feel_max"), t(s.max_apparent)),
+        (lbl("summary.feel_min"), t(s.min_apparent)),
+        (lbl("summary.cloud_avg"), format!("{:>6.0}%", s.avg_cloud)),
         (
-            format!("{:<10}", "Cloud avg:"),
-            format!("{:>6.0}%", s.avg_cloud),
-        ),
-        (
-            format!("{:<10}", "Rain prob:"),
+            lbl("summary.rain_prob"),
             format!("{:>6.0}%", s.max_precip_prob),
         ),
-        (format!("{:<10}", "Rain sum:"), r(s.total_precip)),
-        (format!("{:<10}", "Wind:"), w(s.max_wind_speed)),
-        (format!("{:<10}", "Gusts:"), w(s.max_wind_gust)),
-        (format!("{:<10}", "Pressure:"), p(s.avg_pressure)),
-        (
-            format!("{:<10}", "Humidity:"),
-            format!("{:>6.0}%", s.avg_humidity),
-        ),
+        (lbl("summary.rain_sum"), r(s.total_precip)),
+        (lbl("summary.wind"), w(s.max_wind_speed)),
+        (lbl("summary.gusts"), w(s.max_wind_gust)),
+        (lbl("summary.pressure"), p(s.avg_pressure)),
+        (lbl("summary.humidity"), format!("{:>6.0}%", s.avg_humidity)),
     ]
 }
 
@@ -173,7 +176,15 @@ pub fn print_table(
         .fold(0.0_f64, f64::max)
         .max(0.1);
 
-    let day_w: usize = 18;
+    // Day-summary column width is locale-dependent: it must hold the widest summary label
+    // (label_w + value 7 + trailing space 1) AND the column header itself. Floor of 18 keeps
+    // the original English layout unchanged.
+    let header_w = t!("table.day_summary").chars().count();
+    let natural_label_w = summary_label_w();
+    let day_w: usize = (natural_label_w + SUMMARY_VALUE_W + 1)
+        .max(header_w)
+        .max(18);
+    let label_w: usize = day_w - SUMMARY_VALUE_W - 1;
     let hour_w: usize = 6;
     const MIN_BAR: usize = 3;
 
@@ -214,12 +225,12 @@ pub fn print_table(
         format!(" {:<width$}", title, width = lw + 1 + bw)
     };
     let mut hdr_spans = vec![
-        Span::styled(format!("{:<day_w$}", "DAY SUMMARY"), hdr),
+        Span::styled(format!("{:<day_w$}", t!("table.day_summary")), hdr),
         Span::raw(format!("{:hour_w$}", "")),
     ];
     for (i, (_, lw, _)) in active.iter().enumerate() {
         hdr_spans.push(Span::styled(
-            hdr_col(*lw, bar_ws[i], col_title(i, units, historical)),
+            hdr_col(*lw, bar_ws[i], &col_title(i, units, historical)),
             hdr,
         ));
     }
@@ -247,7 +258,7 @@ pub fn print_table(
             day_summary_idx = dates.iter().position(|d| *d == date).unwrap_or(0);
             current_sunrise = Some(summaries[day_summary_idx].sunrise);
             current_sunset = Some(summaries[day_summary_idx].sunset);
-            day_parts_cache = summary_parts(&summaries[day_summary_idx], units);
+            day_parts_cache = summary_parts(&summaries[day_summary_idx], units, label_w);
         }
 
         let bold = Style::default().add_modifier(Modifier::BOLD);

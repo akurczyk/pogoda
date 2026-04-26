@@ -1,6 +1,6 @@
 [package]
 name = "pogoda"
-version = "0.10.0"
+version = "0.11.0"
 edition = "2024"
 description = "Terminal weather forecast — hourly charts, drone mode, historical data"
 repository = "https://github.com/akurczyk/pogoda"
@@ -16,5 +16,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ratatui = "0.29"
 crossterm = "0.28"
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { version = "0.4", features = ["serde", "unstable-locales"] }
+sys-locale = "0.3"
+rust-i18n = "3"
 anyhow = "1"

@@ -1,3 +1,4 @@
+use rust_i18n::t;
 use serde::Deserialize;
 
 pub fn geocode_city(name: &str) -> anyhow::Result<(f64, f64, String, String)> {
@@ -21,7 +22,7 @@ pub fn geocode_city(name: &str) -> anyhow::Result<(f64, f64, String, String)> {
     let r = resp
         .results
         .and_then(|v| v.into_iter().next())
-        .ok_or_else(|| anyhow::anyhow!("City '{}' not found", name))?;
+        .ok_or_else(|| anyhow::anyhow!("{}", t!("errors.city_not_found", name = name)))?;
     Ok((r.latitude, r.longitude, r.name, r.country))
 }
 
@@ -70,25 +71,25 @@ pub fn parse_days(s: Option<&String>) -> (u32, u32) {
 pub fn parse_days_str(s: &str) -> (u32, u32) {
     if let Some((a, b)) = s.split_once('-') {
         let from: u32 = a.parse().unwrap_or_else(|_| {
-            eprintln!("Error: invalid day range '{}'.", s);
+            eprintln!("{}", t!("errors.invalid_day_range", val = s));
             std::process::exit(1);
         });
         let to: u32 = b.parse().unwrap_or_else(|_| {
-            eprintln!("Error: invalid day range '{}'.", s);
+            eprintln!("{}", t!("errors.invalid_day_range", val = s));
             std::process::exit(1);
         });
         if from < 1 || to > 16 || from > to {
-            eprintln!("Error: day range must be N-M where 1 ≤ N ≤ M ≤ 16.");
+            eprintln!("{}", t!("errors.day_range_bounds"));
             std::process::exit(1);
         }
         (from, to)
     } else {
         let d: u32 = s.parse().unwrap_or_else(|_| {
-            eprintln!("Error: '{}' is not a valid number of days.", s);
+            eprintln!("{}", t!("errors.not_valid_days", val = s));
             std::process::exit(1);
         });
         if d < 1 || d > 16 {
-            eprintln!("Error: days must be between 1 and 16.");
+            eprintln!("{}", t!("errors.days_out_of_range"));
             std::process::exit(1);
         }
         (1, d)

@@ -1,6 +1,6 @@
 use chrono::{NaiveDate, NaiveDateTime};
 
-pub const VERSION: &str = "0.10";
+pub const VERSION: &str = "0.11";
 
 #[cfg(test)]
 mod tests {
@@ -8,7 +8,7 @@ mod tests {
 
     #[test]
     fn version_is_current() {
-        assert_eq!(VERSION, "0.10");
+        assert_eq!(VERSION, "0.11");
     }
 
     #[test]
@@ -50,7 +50,7 @@ pub enum Theme {
 }
 
 /// Unit system for display.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Units {
     Metric,   // default: °C, km/h, mm, hPa
     Imperial, // --strange-units: °F, mph, in, inHg

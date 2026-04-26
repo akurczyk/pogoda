@@ -1,6 +1,7 @@
-use chrono::Datelike;
+use chrono::{Datelike, NaiveDate};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
+use rust_i18n::t;
 use std::io::{self, Write as IoWrite};
 
 use crate::colors::{palette, temp_color, wind_color};
@@ -12,9 +13,12 @@ use crate::render::{
 use crate::types::{HistoricalDailyData, HistoricalMonthlyData, Theme, Units};
 use crate::units::{c_to_f, kmh_to_mph, mm_to_in};
 
-const MONTH_NAMES: &[&str] = &[
-    "", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
+fn month_abbr(year: i32, month: u32) -> String {
+    let loc = crate::locale::chrono_locale(&rust_i18n::locale());
+    NaiveDate::from_ymd_opt(year, month, 1)
+        .map(|d| d.format_localized("%b", loc).to_string())
+        .unwrap_or_default()
+}
 
 // ── Axis helpers ─────────────────────────────────────────────────────────────
 
@@ -41,7 +45,11 @@ fn write_daily_axis(
             try_place(
                 &mut axis,
                 col,
-                &format!("{} {}", MONTH_NAMES[d.date.month() as usize], d.date.year()),
+                &format!(
+                    "{} {}",
+                    month_abbr(d.date.year(), d.date.month()),
+                    d.date.year()
+                ),
                 '─',
             );
             last_month = d.date.month();
@@ -151,13 +159,10 @@ pub fn print_historical_daily_charts(
     let plain_ruler: Vec<char> = vec!['─'; chart_w];
     let r = &plain_ruler;
 
+    let title_tmax = format!("{} °{}", t!("chart.temp_max"), units.temp_label());
     print_one_chart(
         out,
-        if units.use_fahrenheit() {
-            "TEMP MAX °F"
-        } else {
-            "TEMP MAX °C"
-        },
+        &title_tmax,
         &max_temps,
         None,
         temp_min,
@@ -176,13 +181,10 @@ pub fn print_historical_daily_charts(
     )?;
     write_daily_axis(out, data, label_w, chart_w, '├', mono)?;
 
+    let title_tmin = format!("{} °{}", t!("chart.temp_min"), units.temp_label());
     print_one_chart(
         out,
-        if units.use_fahrenheit() {
-            "TEMP MIN °F"
-        } else {
-            "TEMP MIN °C"
-        },
+        &title_tmin,
         &min_temps,
         None,
         temp_min,
@@ -201,13 +203,10 @@ pub fn print_historical_daily_charts(
     )?;
     write_daily_axis(out, data, label_w, chart_w, '├', mono)?;
 
+    let title_rain = format!("{} {}", t!("chart.rain"), units.rain_label());
     print_one_chart(
         out,
-        if units.use_inches() {
-            "RAIN in"
-        } else {
-            "RAIN mm"
-        },
+        &title_rain,
         &precip,
         None,
         0.0,
@@ -226,13 +225,10 @@ pub fn print_historical_daily_charts(
     )?;
     write_daily_axis(out, data, label_w, chart_w, '├', mono)?;
 
+    let title_wind = format!("{} {}", t!("chart.wind"), units.wind_label());
     print_one_chart(
         out,
-        if units.use_mph() {
-            "WIND mph"
-        } else {
-            "WIND km/h"
-        },
+        &title_wind,
         &winds,
         None,
         0.0,
@@ -251,13 +247,10 @@ pub fn print_historical_daily_charts(
     )?;
     write_daily_axis(out, data, label_w, chart_w, '├', mono)?;
 
+    let title_gusts = format!("{} {}", t!("chart.gusts"), units.wind_label());
     print_one_chart(
         out,
-        if units.use_mph() {
-            "GUSTS mph"
-        } else {
-            "GUSTS km/h"
-        },
+        &title_gusts,
         &gusts,
         None,
         0.0,
@@ -348,13 +341,10 @@ pub fn print_historical_monthly_charts(
 
     let plain_ruler: Vec<char> = vec!['─'; chart_w];
     let r = &plain_ruler;
+    let title_avg_tmax = format!("{} °{}", t!("chart.avg_tmax"), units.temp_label());
     print_one_chart(
         out,
-        if units.use_fahrenheit() {
-            "AVG TMAX °F"
-        } else {
-            "AVG TMAX °C"
-        },
+        &title_avg_tmax,
         &max_t,
         None,
         temp_min,
@@ -373,13 +363,10 @@ pub fn print_historical_monthly_charts(
     )?;
     write_monthly_axis(out, data, label_w, chart_w, '├', mono)?;
 
+    let title_avg_tmin = format!("{} °{}", t!("chart.avg_tmin"), units.temp_label());
     print_one_chart(
         out,
-        if units.use_fahrenheit() {
-            "AVG TMIN °F"
-        } else {
-            "AVG TMIN °C"
-        },
+        &title_avg_tmin,
         &min_t,
         None,
         temp_min,
@@ -398,13 +385,10 @@ pub fn print_historical_monthly_charts(
     )?;
     write_monthly_axis(out, data, label_w, chart_w, '├', mono)?;
 
+    let title_ext_tmax = format!("{} °{}", t!("chart.ext_tmax"), units.temp_label());
     print_one_chart(
         out,
-        if units.use_fahrenheit() {
-            "EXT TMAX °F"
-        } else {
-            "EXT TMAX °C"
-        },
+        &title_ext_tmax,
         &ext_max,
         None,
         temp_min,
@@ -423,13 +407,10 @@ pub fn print_historical_monthly_charts(
     )?;
     write_monthly_axis(out, data, label_w, chart_w, '├', mono)?;
 
+    let title_ext_tmin = format!("{} °{}", t!("chart.ext_tmin"), units.temp_label());
     print_one_chart(
         out,
-        if units.use_fahrenheit() {
-            "EXT TMIN °F"
-        } else {
-            "EXT TMIN °C"
-        },
+        &title_ext_tmin,
         &ext_min,
         None,
         temp_min,
@@ -448,13 +429,10 @@ pub fn print_historical_monthly_charts(
     )?;
     write_monthly_axis(out, data, label_w, chart_w, '├', mono)?;
 
+    let title_rain_mon = format!("{} {}", t!("chart.rain"), units.rain_label());
     print_one_chart(
         out,
-        if units.use_inches() {
-            "RAIN in"
-        } else {
-            "RAIN mm"
-        },
+        &title_rain_mon,
         &precip,
         None,
         0.0,
@@ -473,13 +451,10 @@ pub fn print_historical_monthly_charts(
     )?;
     write_monthly_axis(out, data, label_w, chart_w, '├', mono)?;
 
+    let title_wind_mon = format!("{} {}", t!("chart.wind"), units.wind_label());
     print_one_chart(
         out,
-        if units.use_mph() {
-            "WIND mph"
-        } else {
-            "WIND km/h"
-        },
+        &title_wind_mon,
         &winds,
         None,
         0.0,
@@ -498,13 +473,10 @@ pub fn print_historical_monthly_charts(
     )?;
     write_monthly_axis(out, data, label_w, chart_w, '├', mono)?;
 
+    let title_gusts_mon = format!("{} {}", t!("chart.gusts"), units.wind_label());
     print_one_chart(
         out,
-        if units.use_mph() {
-            "GUSTS mph"
-        } else {
-            "GUSTS km/h"
-        },
+        &title_gusts_mon,
         &gusts,
         None,
         0.0,
@@ -533,30 +505,12 @@ pub fn print_historical_monthly_charts(
 const HIST_DAILY_COLS: &[(&str, usize, usize)] =
     &[("TEMP °C", 11, 9), ("RAIN mm", 7, 8), ("WIND km/h", 11, 9)];
 
-fn hist_daily_col_title(i: usize, units: Units) -> &'static str {
+fn hist_daily_col_title(i: usize, units: Units) -> String {
     match i {
-        0 => {
-            if units.use_fahrenheit() {
-                "TEMP °F"
-            } else {
-                "TEMP °C"
-            }
-        }
-        1 => {
-            if units.use_inches() {
-                "RAIN in"
-            } else {
-                "RAIN mm"
-            }
-        }
-        2 => {
-            if units.use_mph() {
-                "WIND mph"
-            } else {
-                "WIND km/h"
-            }
-        }
-        _ => HIST_DAILY_COLS[i].0,
+        0 => format!("{} °{}", t!("col.temp"), units.temp_label()),
+        1 => format!("{} {}", t!("col.rain"), units.rain_label()),
+        2 => format!("{} {}", t!("col.wind"), units.wind_label()),
+        _ => HIST_DAILY_COLS[i].0.to_string(),
     }
 }
 
@@ -622,10 +576,10 @@ pub fn print_historical_daily_table(
 
     let mut lines: Vec<Line> = Vec::new();
 
-    let mut hdr_spans = vec![Span::styled(format!("{:<date_w$}", "DATE"), hdr)];
+    let mut hdr_spans = vec![Span::styled(format!("{:<date_w$}", t!("col.date")), hdr)];
     for (i, (_, lw, _)) in HIST_DAILY_COLS.iter().enumerate() {
         hdr_spans.push(Span::styled(
-            hdr_col(*lw, bar_ws[i], hist_daily_col_title(i, units)),
+            hdr_col(*lw, bar_ws[i], &hist_daily_col_title(i, units)),
             hdr,
         ));
     }
@@ -638,7 +592,11 @@ pub fn print_historical_daily_table(
             if last_month != 0 {
                 lines.push(Line::from(Span::styled("─".repeat(sep_w), dim)));
             }
-            let label = format!("{} {}", MONTH_NAMES[d.date.month() as usize], d.date.year());
+            let label = format!(
+                "{} {}",
+                month_abbr(d.date.year(), d.date.month()),
+                d.date.year()
+            );
             lines.push(Line::from(vec![Span::styled(
                 format!("{:<sep_w$}", label),
                 Style::default()
@@ -648,11 +606,12 @@ pub fn print_historical_daily_table(
             last_month = d.date.month();
         }
 
+        let loc = crate::locale::chrono_locale(&rust_i18n::locale());
         let date_label = format!(
             "{} {:02} {}",
-            &crate::weather::day_name(d.date)[..3],
+            d.date.format_localized("%a", loc),
             d.date.day(),
-            MONTH_NAMES[d.date.month() as usize]
+            month_abbr(d.date.year(), d.date.month())
         );
         let mut spans = vec![Span::styled(format!("{:<date_w$}", date_label), dim)];
 
@@ -733,37 +692,13 @@ const HIST_MON_COLS: &[(&str, usize, usize)] = &[
     ("WIND km/h", 11, 9),
 ];
 
-fn hist_mon_col_title(i: usize, units: Units) -> &'static str {
+fn hist_mon_col_title(i: usize, units: Units) -> String {
     match i {
-        0 => {
-            if units.use_fahrenheit() {
-                "AVG TEMP °F"
-            } else {
-                "AVG TEMP °C"
-            }
-        }
-        1 => {
-            if units.use_fahrenheit() {
-                "EXT TEMP °F"
-            } else {
-                "EXT TEMP °C"
-            }
-        }
-        2 => {
-            if units.use_inches() {
-                "RAIN in"
-            } else {
-                "RAIN mm"
-            }
-        }
-        3 => {
-            if units.use_mph() {
-                "WIND mph"
-            } else {
-                "WIND km/h"
-            }
-        }
-        _ => HIST_MON_COLS[i].0,
+        0 => format!("{} °{}", t!("col.avg_temp"), units.temp_label()),
+        1 => format!("{} °{}", t!("col.ext_temp"), units.temp_label()),
+        2 => format!("{} {}", t!("col.rain"), units.rain_label()),
+        3 => format!("{} {}", t!("col.wind"), units.wind_label()),
+        _ => HIST_MON_COLS[i].0.to_string(),
     }
 }
 
@@ -829,10 +764,13 @@ pub fn print_historical_monthly_table(
 
     let mut lines: Vec<Line> = Vec::new();
 
-    let mut hdr_spans = vec![Span::styled(format!("{:<month_w$}", "MONTH"), hdr_sty)];
+    let mut hdr_spans = vec![Span::styled(
+        format!("{:<month_w$}", t!("col.month")),
+        hdr_sty,
+    )];
     for (i, (_, lw, _)) in HIST_MON_COLS.iter().enumerate() {
         hdr_spans.push(Span::styled(
-            hdr_col(*lw, bar_ws[i], hist_mon_col_title(i, units)),
+            hdr_col(*lw, bar_ws[i], &hist_mon_col_title(i, units)),
             hdr_sty,
         ));
     }
@@ -854,7 +792,7 @@ pub fn print_historical_monthly_table(
             last_year = m.year;
         }
 
-        let label = format!("{:<month_w$}", MONTH_NAMES[m.month as usize]);
+        let label = format!("{:<month_w$}", month_abbr(m.year, m.month));
         let mut spans = vec![Span::styled(label, dim_sty)];
 
         for (i, _) in HIST_MON_COLS.iter().enumerate() {
@@ -963,28 +901,26 @@ pub fn write_hist_footer(
 ) -> io::Result<()> {
     let dim = if mono { "" } else { "\x1b[90m" };
     let reset = if mono { "" } else { "\x1b[0m" };
+    let mods = t!("usage.modifiers_title");
+    let indent = " ".repeat(mods.chars().count() + 1);
     writeln!(out)?;
     write!(out, "{dim}")?;
-    writeln!(
-        out,
-        "Data source: Open-Meteo Historical Weather API (archive-api.open-meteo.com)"
-    )?;
-    writeln!(out, "API URL:     {api_url}")?;
+    writeln!(out, "{}", t!("footer.data_source_hist"))?;
+    writeln!(out, "{} {api_url}", t!("footer.api_url_label"))?;
     writeln!(out)?;
+    writeln!(out, "{} --i-drone-you  --delorean  --units  --lang", mods)?;
     writeln!(
         out,
-        "Modifiers: --i-drone-you  --delorean  --strange-units  --yes-sir"
+        "{}--i-am-blue  --color-me  --classic-colors  --rainforest  --i-cant-afford-cga",
+        indent
     )?;
     writeln!(
         out,
-        "           --i-am-blue  --color-me  --classic-colors  --rainforest  --i-cant-afford-cga"
-    )?;
-    writeln!(
-        out,
-        "           --no-eyecandy  --high-charts  --no-charts  --no-table  --tabular-bells"
+        "{}--no-eyecandy  --high-charts  --no-charts  --no-table  --tabular-bells",
+        indent
     )?;
     writeln!(out)?;
-    writeln!(out, "https://github.com/akurczyk/pogoda  v{version}")?;
+    writeln!(out, "{}  v{version}", t!("footer.github"))?;
     write!(out, "{reset}")?;
     Ok(())
 }

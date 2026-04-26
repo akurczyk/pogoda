@@ -491,16 +491,10 @@ pub fn aggregate_monthly(days: &[HistoricalDailyData]) -> Vec<crate::types::Hist
         .collect()
 }
 
-pub fn day_name(date: NaiveDate) -> &'static str {
-    match date.weekday() {
-        chrono::Weekday::Mon => "Monday",
-        chrono::Weekday::Tue => "Tuesday",
-        chrono::Weekday::Wed => "Wednesday",
-        chrono::Weekday::Thu => "Thursday",
-        chrono::Weekday::Fri => "Friday",
-        chrono::Weekday::Sat => "Saturday",
-        chrono::Weekday::Sun => "Sunday",
-    }
+pub fn day_name(date: NaiveDate) -> String {
+    let lang = rust_i18n::locale();
+    let loc = crate::locale::chrono_locale(lang.as_ref());
+    date.format_localized("%A", loc).to_string()
 }
 
 #[cfg(test)]

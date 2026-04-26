@@ -1,6 +1,6 @@
 # Pogoda
 
-**Terminal Weather Forecast** — v0.10
+**Terminal Weather Forecast** — v0.11
 
 Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://open-meteo.com) and renders a rich, color-coded report directly in your terminal. It shows area charts for the full forecast period and an hourly table with bars, all scaled to your terminal width. **A dedicated drone pilot mode** (`--i-drone-you`) shows wind at multiple altitudes, rain intensity, and UV index. **Historical data going back decades** is available via `--delorean`, with automatic hourly/daily/monthly rendering based on the date range.
 
@@ -21,11 +21,11 @@ Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://ope
 </td>
 <td width="50%" valign="top">
 
-**American units — `--strange-units`**
+**American units — `--units imperial`**
 
 ![Strange units forecast](imgs/02.png)
 
-Data in °F, mph, inches of rain, and inHg pressure. All charts and the hourly table update accordingly. Warm indigo → red → orange palette (default one) on a dark terminal background.
+Data in °F, mph, inches of rain, and inHg pressure. All charts and the hourly table update accordingly. Warm indigo → red → orange palette (default one) on a dark terminal background. This is also what users in the US get automatically (auto-detected from OS locale).
 
 </td>
 </tr>
@@ -97,7 +97,7 @@ cargo install pogoda
 **Download a pre-built binary (Linux/macOS)**:
 
 ```bash
-# Replace <version> and <target> with the appropriate values, e.g. v0.10 and x86_64-unknown-linux-musl
+# Replace <version> and <target> with the appropriate values, e.g. v0.11 and x86_64-unknown-linux-musl
 curl -L https://github.com/akurczyk/pogoda/releases/download/<version>/pogoda-<target>.tar.gz | tar -xz
 sudo mv pogoda /usr/local/bin/
 ```
@@ -105,7 +105,7 @@ sudo mv pogoda /usr/local/bin/
 **Download a pre-built binary (Windows)**:
 
 ```powershell
-# Replace <version> and <target> with the appropriate values, e.g. v0.10 and x86_64-pc-windows-msvc
+# Replace <version> and <target> with the appropriate values, e.g. v0.11 and x86_64-pc-windows-msvc
 Invoke-WebRequest -Uri https://github.com/akurczyk/pogoda/releases/download/<version>/pogoda-<target>.zip -OutFile pogoda.zip
 Expand-Archive pogoda.zip -DestinationPath .
 ```
@@ -148,12 +148,14 @@ pogoda <city> [days]
 
 ## Modifiers
 
+Pogoda auto-detects your unit system and UI language from the OS locale; the flags below override those defaults.
+
 | Flag | Description |
 |------|-------------|
 | `--i-drone-you` | Drone pilot profile: wind at 10/80/120/180 m, rain intensity, UV index |
 | `--delorean D1 D2` | Historical data from D1 to D2 (DD.MM.YYYY); auto-selects hourly/daily/monthly |
-| `--strange-units` | American units: °F, mph, in, inHg |
-| `--yes-sir` | British units: °C, mph, mm, hPa |
+| `--units metric\|imperial\|british` | Force unit system (default: auto from OS locale) |
+| `--lang <code>` | Force UI language: `en`, `de`, `es-es`, `es-419`, `fr-fr`, `fr-ca`, `it`, `pt-br`, `pt-pt`, `nl`, `pl`, `cs`, `sk`, `hu`, `ro`, `hr`, `sv`, `da`, `nb`, `fi`, `tr`, `el`, `ru`, `uk`, `ca` (default: auto from OS locale) |
 | `--i-am-blue` | Cool color palette (cyan → blue → indigo) |
 | `--color-me` | Full spectrum palette (cyan → blue → indigo → red → orange) |
 | `--classic-colors` | Classic palette (blue → cyan → green → yellow → orange → red) |
@@ -178,7 +180,7 @@ Designed for drone pilots and other low-altitude aviators. Replaces the standard
 - **UV index** — color-scaled bar from safe (0) to extreme (11+)
 - **Per-day summary** — max wind at each altitude, max gusts, peak UV, rain probability and total, sunrise/sunset
 
-CSV export (`--tabular-bells`) outputs all altitudes, directions, gusts, and UV per hour. All unit modifiers (`--strange-units`, `--yes-sir`) and palette flags work in drone mode.
+CSV export (`--tabular-bells`) outputs all altitudes, directions, gusts, and UV per hour. All unit modifiers (`--units`) and palette flags work in drone mode.
 
 ### Historical data (`--delorean D1 D2`)
 
@@ -188,7 +190,7 @@ Fetches historical weather from the [Open-Meteo Archive API](https://open-meteo.
 - **32–365 days → daily** — overview charts (temp max/min, rain, wind, gusts) and a daily table with dual bars for temperature (● max / ◆ min) and wind (speed / gusts)
 - **> 365 days → monthly** — same charts and table aggregated to calendar months, with a year-based bottom axis
 
-CSV export (`--tabular-bells`) works for all three modes. All unit modifiers and palette flags apply.
+CSV export (`--tabular-bells`) works for all three modes. All `--units` and palette flags apply.
 
 ---
 
@@ -200,14 +202,15 @@ pogoda 51.10,17.00 14                                          # Wrocław by coo
 pogoda Wrocław                                                 # City name lookup
 pogoda Wrocław 3-7                                             # Days 3 through 7
 pogoda Berlin 5-10                                             # Days 5 through 10
-pogoda New York 5 --strange-units                              # American units
-pogoda London 7 --yes-sir                                      # British units
+pogoda New York 5 --units imperial                             # American units (also auto on US locale)
+pogoda London 7 --units british                                # British units
 pogoda Tokyo 10 --i-am-blue                                    # Cool color palette
 pogoda Berlin 7 --no-charts                                    # Table only
 pogoda Paris 3 --tabular-bells                                 # CSV output
+pogoda Wrocław 3 --lang pl                                     # Polish UI language
 pogoda Wrocław 7 --i-drone-you                                 # Drone pilot profile
 pogoda Berlin 5-10 --i-drone-you                               # Drone profile, days 5–10
-pogoda Alps 3 --i-drone-you --strange-units                    # Drone profile, American units
+pogoda Alps 3 --i-drone-you --units imperial                   # Drone profile, American units
 pogoda Wrocław 7 --i-drone-you --tabular-bells                 # Drone CSV export
 pogoda Wrocław --delorean 01.01.2024 31.01.2024                # Historical hourly (≤31 days)
 pogoda Berlin --delorean 01.01.2020 31.12.2020                 # Historical daily (≤365 days)

@@ -3,6 +3,7 @@ use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span},
 };
+use rust_i18n::t;
 use std::io::{self, Write as IoWrite};
 
 use crate::colors::{palette, temp_color, wind_color};
@@ -33,55 +34,52 @@ pub const DRONE_COL_DEFS: &[(&str, usize, usize)] = &[
     ("UV IDX", 4, 5),
 ];
 
-pub fn drone_col_title(i: usize, units: Units) -> &'static str {
+/// All summary-row label keys used by `drone_summary_parts`.
+const DRONE_SUMMARY_KEYS: &[&str] = &[
+    "summary.sunrise",
+    "summary.sunset",
+    "summary.temp_max",
+    "summary.temp_min",
+    "summary.rain_prob",
+    "summary.rain_sum",
+    "summary.w_10m",
+    "summary.w_80m",
+    "summary.w_120m",
+    "summary.w_180m",
+    "summary.gusts",
+    "summary.uv_max",
+];
+
+/// Width of the formatted value half of a drone summary row.
+const DRONE_SUMMARY_VALUE_W: usize = 7;
+
+fn drone_summary_label_w() -> usize {
+    DRONE_SUMMARY_KEYS
+        .iter()
+        .map(|k| t!(*k).chars().count())
+        .max()
+        .unwrap_or(0)
+}
+
+pub fn drone_col_title(i: usize, units: Units) -> String {
     match i {
-        0 => {
-            if units.use_fahrenheit() {
-                "TEMP °F"
-            } else {
-                "TEMP °C"
-            }
-        }
-        1 => {
-            if units.use_inches() {
-                "RAIN %→/in↑"
-            } else {
-                "RAIN %→/mm↑"
-            }
-        }
-        2 => {
-            if units.use_mph() {
-                "W  10m mph"
-            } else {
-                "W 10m km/h"
-            }
-        }
-        3 => {
-            if units.use_mph() {
-                "W  80m mph"
-            } else {
-                "W 80m km/h"
-            }
-        }
-        4 => {
-            if units.use_mph() {
-                "W 120m mph"
-            } else {
-                "W 120m km/h"
-            }
-        }
-        5 => {
-            if units.use_mph() {
-                "W 180m mph"
-            } else {
-                "W 180m km/h"
-            }
-        }
-        _ => DRONE_COL_DEFS[i].0,
+        0 => format!("{} °{}", t!("col.temp"), units.temp_label()),
+        1 => format!("{} %→/{}↑", t!("col.rain"), units.rain_label()),
+        2 => format!("W {:>3}m {}", 10, units.wind_label()),
+        3 => format!("W {:>3}m {}", 80, units.wind_label()),
+        4 => format!("W {:>3}m {}", 120, units.wind_label()),
+        5 => format!("W {:>3}m {}", 180, units.wind_label()),
+        6 => t!("col.gusts").to_string(),
+        7 => t!("col.uv_idx").to_string(),
+        _ => DRONE_COL_DEFS[i].0.to_string(),
     }
 }
 
-pub fn drone_summary_parts(s: &DroneDaySummary, units: Units) -> Vec<(String, String)> {
+pub fn drone_summary_parts(
+    s: &DroneDaySummary,
+    units: Units,
+    label_w: usize,
+) -> Vec<(String, String)> {
     let t = |v: f64| {
         if units.use_fahrenheit() {
             format!("{:>5.1}°F", c_to_f(v))
@@ -103,45 +101,31 @@ pub fn drone_summary_parts(s: &DroneDaySummary, units: Units) -> Vec<(String, St
             format!("{:>5.1}mm", v)
         }
     };
+    let lbl = |k: &str| format!("{:<label_w$}", t!(k));
     vec![
         (format!("{}", s.date.format("%Y-%m-%d")), String::new()),
-        (format!("{}", day_name(s.date)), String::new()),
+        (day_name(s.date), String::new()),
         (
-            format!("{:<10}", "Sunrise:"),
+            lbl("summary.sunrise"),
             format!("{:>7}", s.sunrise.format("%H:%M")),
         ),
         (
-            format!("{:<10}", "Sunset:"),
+            lbl("summary.sunset"),
             format!("{:>7}", s.sunset.format("%H:%M")),
         ),
-        (format!("{:<10}", "Temp max:"), t(s.max_temp)),
-        (format!("{:<10}", "Temp min:"), t(s.min_temp)),
+        (lbl("summary.temp_max"), t(s.max_temp)),
+        (lbl("summary.temp_min"), t(s.min_temp)),
         (
-            format!("{:<10}", "Rain prob:"),
+            lbl("summary.rain_prob"),
             format!("{:>6.0}%", s.max_precip_prob),
         ),
-        (format!("{:<10}", "Rain sum:"), r(s.total_precip)),
-        (
-            format!("{:<10}", "W 10m:"),
-            format!("{}", w(s.max_wind_10m)),
-        ),
-        (
-            format!("{:<10}", "W 80m:"),
-            format!("{}", w(s.max_wind_80m)),
-        ),
-        (
-            format!("{:<10}", "W 120m:"),
-            format!("{}", w(s.max_wind_120m)),
-        ),
-        (
-            format!("{:<10}", "W 180m:"),
-            format!("{}", w(s.max_wind_180m)),
-        ),
-        (
-            format!("{:<10}", "Gusts:"),
-            format!("{}", w(s.max_gust_10m)),
-        ),
-        (format!("{:<10}", "UV max:"), format!(" {:>6.1}", s.max_uv)),
+        (lbl("summary.rain_sum"), r(s.total_precip)),
+        (lbl("summary.w_10m"), w(s.max_wind_10m)),
+        (lbl("summary.w_80m"), w(s.max_wind_80m)),
+        (lbl("summary.w_120m"), w(s.max_wind_120m)),
+        (lbl("summary.w_180m"), w(s.max_wind_180m)),
+        (lbl("summary.gusts"), w(s.max_gust_10m)),
+        (lbl("summary.uv_max"), format!(" {:>6.1}", s.max_uv)),
     ]
 }
 
@@ -247,7 +231,15 @@ pub fn print_drone_table(
         .fold(0.0_f64, f64::max)
         .max(1.0);
 
-    let day_w: usize = 18;
+    // Day-summary column width is locale-dependent: it must hold the widest summary label
+    // (label_w + value 7 + trailing space 1) AND the column header itself. Floor of 18 keeps
+    // the original English layout unchanged.
+    let header_w = t!("table.day_summary").chars().count();
+    let natural_label_w = drone_summary_label_w();
+    let day_w: usize = (natural_label_w + DRONE_SUMMARY_VALUE_W + 1)
+        .max(header_w)
+        .max(18);
+    let label_w: usize = day_w - DRONE_SUMMARY_VALUE_W - 1;
     let hour_w: usize = 6;
     const MIN_BAR: usize = 3;
 
@@ -295,12 +287,12 @@ pub fn print_drone_table(
     let hdr_col =
         |lw: usize, bw: usize, title: &str| format!(" {:<width$}", title, width = lw + 1 + bw);
     let mut hdr_spans = vec![
-        Span::styled(format!("{:<day_w$}", "DAY SUMMARY"), hdr_sty),
+        Span::styled(format!("{:<day_w$}", t!("table.day_summary")), hdr_sty),
         Span::raw(format!("{:hour_w$}", "")),
     ];
     for (i, (_, lw, _)) in active.iter().enumerate() {
         hdr_spans.push(Span::styled(
-            hdr_col(*lw, bar_ws[i], drone_col_title(i, units)),
+            hdr_col(*lw, bar_ws[i], &drone_col_title(i, units)),
             hdr_sty,
         ));
     }
@@ -336,7 +328,7 @@ pub fn print_drone_table(
             day_summary_idx = dates.iter().position(|d| *d == date).unwrap_or(0);
             current_sunrise = Some(summaries[day_summary_idx].sunrise);
             current_sunset = Some(summaries[day_summary_idx].sunset);
-            day_parts_cache = drone_summary_parts(&summaries[day_summary_idx], units);
+            day_parts_cache = drone_summary_parts(&summaries[day_summary_idx], units, label_w);
         }
 
         let bold = Style::default().add_modifier(Modifier::BOLD);

@@ -1,4 +1,5 @@
 use ratatui::style::Color;
+use rust_i18n::t;
 use std::io::{self, Write as IoWrite};
 
 use crate::colors::{palette, pressure_color, temp_color, wind_color};
@@ -212,13 +213,10 @@ pub fn print_overview(
     }
 
     let r = &hour_ruler;
+    let title_temp = format!("{} °{}", t!("chart.temp"), units.temp_label());
     print_one_chart(
         out,
-        if units.use_fahrenheit() {
-            "TEMP °F"
-        } else {
-            "TEMP °C"
-        },
+        &title_temp,
         &temps,
         None,
         temp_min,
@@ -236,13 +234,10 @@ pub fn print_overview(
         mono,
     )?;
 
+    let title_feel = format!("{} °{}", t!("chart.feel"), units.temp_label());
     print_one_chart(
         out,
-        if units.use_fahrenheit() {
-            "FEEL °F"
-        } else {
-            "FEEL °C"
-        },
+        &title_feel,
         &feels,
         None,
         temp_min,
@@ -260,9 +255,10 @@ pub fn print_overview(
         mono,
     )?;
 
+    let title_cloud = t!("chart.cloud");
     print_one_chart(
         out,
-        "CLOUD %",
+        &title_cloud,
         &clouds,
         None,
         0.0,
@@ -281,9 +277,10 @@ pub fn print_overview(
     )?;
 
     if !historical {
+        let title_rain_prob = t!("chart.rain_prob");
         print_one_chart(
             out,
-            "RAIN %",
+            &title_rain_prob,
             &rain_p,
             None,
             0.0,
@@ -302,13 +299,10 @@ pub fn print_overview(
         )?;
     }
 
+    let title_rain = format!("{} {}", t!("chart.rain"), units.rain_label());
     print_one_chart(
         out,
-        if units.use_inches() {
-            "RAIN in"
-        } else {
-            "RAIN mm"
-        },
+        &title_rain,
         &rain_m,
         None,
         0.0,
@@ -326,13 +320,10 @@ pub fn print_overview(
         mono,
     )?;
 
+    let title_wind = format!("{} {}", t!("chart.wind"), units.wind_label());
     print_one_chart(
         out,
-        if units.use_mph() {
-            "WIND mph"
-        } else {
-            "WIND km/h"
-        },
+        &title_wind,
         &winds,
         None,
         0.0,
@@ -350,13 +341,10 @@ pub fn print_overview(
         mono,
     )?;
 
+    let title_gusts = format!("{} {}", t!("chart.gusts"), units.wind_label());
     print_one_chart(
         out,
-        if units.use_mph() {
-            "GUSTS mph"
-        } else {
-            "GUSTS km/h"
-        },
+        &title_gusts,
         &gusts,
         None,
         0.0,
@@ -374,13 +362,10 @@ pub fn print_overview(
         mono,
     )?;
 
+    let title_pressure = format!("{} {}", t!("chart.pressure"), units.pressure_label());
     print_one_chart(
         out,
-        if units.use_inhg() {
-            "PRES inHg"
-        } else {
-            "PRESSURE hPa"
-        },
+        &title_pressure,
         &press,
         None,
         press_min,
@@ -398,9 +383,10 @@ pub fn print_overview(
         mono,
     )?;
 
+    let title_humidity = t!("col.humidity");
     print_one_chart(
         out,
-        "HUMIDITY %",
+        &title_humidity,
         &humid,
         None,
         0.0,
@@ -421,6 +407,7 @@ pub fn print_overview(
     // Day names below the last chart's ruler, on a ─ background
     let dim = if mono { "" } else { "\x1b[90m" };
     let reset = if mono { "" } else { "\x1b[0m" };
+    let chrono_loc = crate::locale::chrono_locale(&rust_i18n::locale());
 
     write!(out, "{dim}{}└", " ".repeat(label_w))?;
     let mut day_chars: Vec<char> = vec!['─'; chart_w];
@@ -430,7 +417,10 @@ pub fn print_overview(
             try_place(
                 &mut day_chars,
                 col,
-                &hd.time.format("%a %d").to_string(),
+                &hd.time
+                    .date()
+                    .format_localized("%a %d", chrono_loc)
+                    .to_string(),
                 '─',
             );
         }

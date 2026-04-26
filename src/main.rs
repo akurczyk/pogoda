@@ -1,12 +1,15 @@
 mod colors;
 mod geo;
+mod locale;
 mod render;
 mod types;
 mod units;
 mod weather;
 
-use chrono::Datelike;
+rust_i18n::i18n!("locales", fallback = "en");
+
 use ratatui::style::Color;
+use rust_i18n::t;
 use std::io::{self, Write as IoWrite};
 
 use colors::palette;
@@ -24,51 +27,96 @@ use weather::{
 };
 
 fn print_usage() {
-    eprintln!("Pogoda - Terminal Weather Forecast  v{VERSION}\n");
-    eprintln!("Usage:");
-    eprintln!("  pogoda <latitude> <longitude> [days]");
-    eprintln!("  pogoda <lat,lng> [days]");
-    eprintln!("  pogoda <city> [days]\n");
-    eprintln!("  days  Forecast days 1–16 (default: 7); range N-M shows only days N through M\n");
-    eprintln!("Modifiers:");
-    eprintln!(
-        "  --i-drone-you        Drone pilot profile: multi-altitude wind, rain intensity, UV"
-    );
-    eprintln!(
-        "  --delorean D1 D2     Historical data from D1 to D2 (DD.MM.YYYY); auto-selects hourly/daily/monthly"
-    );
-    eprintln!("  --strange-units      American units: °F, mph, in, inHg");
-    eprintln!("  --yes-sir            British units: °C, mph, mm, hPa");
-    eprintln!("  --i-am-blue          Cool palette: cyan → blue → indigo");
-    eprintln!("  --color-me           Full palette: cyan → blue → indigo → red → orange");
-    eprintln!(
-        "  --classic-colors     Classic palette: blue → cyan → green → yellow → orange → red"
-    );
-    eprintln!("  --rainforest         Nature palette: cyan → green → lime");
-    eprintln!("  --i-cant-afford-cga  Monochromatic output (no colors)");
-    eprintln!("  --high-charts        Taller charts (24 rows)");
-    eprintln!("  --no-charts          Skip the overview charts");
-    eprintln!("  --no-table           Skip the hourly table");
-    eprintln!("  --tabular-bells      Output CSV data instead of charts/table");
-    eprintln!("  --no-eyecandy        Skip logo, location header and footer\n");
-    eprintln!("  (Default palette: indigo → red → orange)\n");
-    eprintln!("Examples:");
-    eprintln!("  pogoda 52.52 13.41");
-    eprintln!("  pogoda 51.10,17.00 14");
-    eprintln!("  pogoda Wrocław");
-    eprintln!("  pogoda Berlin 10 --strange-units");
-    eprintln!("  pogoda London 7 --yes-sir");
-    eprintln!("  pogoda New York 7 --i-am-blue");
-    eprintln!("  pogoda Wrocław 3-7              (days 3 through 7)");
-    eprintln!("  pogoda Berlin 5-10 --i-drone-you\n");
-    eprintln!("https://github.com/akurczyk/pogoda  v{VERSION}");
+    eprintln!("{}\n", t!("usage.header", version = VERSION));
+    eprintln!("{}:", t!("usage.usage_title"));
+    eprintln!("  {}", t!("usage.usage_lat_lng"));
+    eprintln!("  {}", t!("usage.usage_latlng"));
+    eprintln!("  {}\n", t!("usage.usage_city"));
+    eprintln!("  {}\n", t!("usage.days_desc"));
+    eprintln!("{}:", t!("usage.modifiers_title"));
+    eprintln!("  {}", t!("usage.flag_drone"));
+    eprintln!("  {}", t!("usage.flag_delorean"));
+    eprintln!("  {}", t!("usage.flag_units"));
+    eprintln!("  {}", t!("usage.flag_lang"));
+    eprintln!("  {}", t!("usage.flag_blue"));
+    eprintln!("  {}", t!("usage.flag_color_me"));
+    eprintln!("  {}", t!("usage.flag_classic"));
+    eprintln!("  {}", t!("usage.flag_rainforest"));
+    eprintln!("  {}", t!("usage.flag_mono"));
+    eprintln!("  {}", t!("usage.flag_high_charts"));
+    eprintln!("  {}", t!("usage.flag_no_charts"));
+    eprintln!("  {}", t!("usage.flag_no_table"));
+    eprintln!("  {}", t!("usage.flag_tabular"));
+    eprintln!("  {}\n", t!("usage.flag_no_eyecandy"));
+    eprintln!("  {}\n", t!("usage.default_palette"));
+    eprintln!("{}:", t!("usage.examples_title"));
+    eprintln!("  {}", t!("usage.ex1"));
+    eprintln!("  {}", t!("usage.ex2"));
+    eprintln!("  {}", t!("usage.ex3"));
+    eprintln!("  {}", t!("usage.ex4"));
+    eprintln!("  {}", t!("usage.ex5"));
+    eprintln!("  {}", t!("usage.ex6"));
+    eprintln!("  {}", t!("usage.ex7"));
+    eprintln!("  {}", t!("usage.ex8"));
+    eprintln!("  {}\n", t!("usage.ex9"));
+    eprintln!("{}", t!("footer.github"));
 }
 
 fn main() -> anyhow::Result<()> {
     let raw_args: Vec<String> = std::env::args().collect();
 
-    let imperial = raw_args.iter().any(|a| a == "--strange-units");
-    let british = raw_args.iter().any(|a| a == "--yes-sir");
+    // ── Value-taking flags ────────────────────────────────────────────────────
+    let cli_units: Option<Units> = raw_args
+        .iter()
+        .position(|a| a == "--units")
+        .and_then(|pos| raw_args.get(pos + 1))
+        .and_then(|s| match s.as_str() {
+            "imperial" => Some(Units::Imperial),
+            "british" => Some(Units::British),
+            "metric" => Some(Units::Metric),
+            _ => None,
+        });
+
+    let cli_lang: Option<&'static str> = raw_args
+        .iter()
+        .position(|a| a == "--lang")
+        .and_then(|pos| raw_args.get(pos + 1))
+        .and_then(|s| match s.as_str() {
+            "en" => Some("en"),
+            "ca" => Some("ca"),
+            "cs" => Some("cs"),
+            "da" => Some("da"),
+            "de" => Some("de"),
+            "el" => Some("el"),
+            "es-es" => Some("es-es"),
+            "es-419" => Some("es-419"),
+            "fi" => Some("fi"),
+            "fr-fr" => Some("fr-fr"),
+            "fr-ca" => Some("fr-ca"),
+            "hr" => Some("hr"),
+            "hu" => Some("hu"),
+            "it" => Some("it"),
+            "nb" => Some("nb"),
+            "nl" => Some("nl"),
+            "pl" => Some("pl"),
+            "pt-br" => Some("pt-br"),
+            "pt-pt" => Some("pt-pt"),
+            "ro" => Some("ro"),
+            "ru" => Some("ru"),
+            "sk" => Some("sk"),
+            "sv" => Some("sv"),
+            "tr" => Some("tr"),
+            "uk" => Some("uk"),
+            _ => None,
+        });
+
+    // ── Locale auto-detection ─────────────────────────────────────────────────
+    let (auto_units, auto_lang) = locale::detect();
+    let units = cli_units.or(auto_units).unwrap_or(Units::Metric);
+    let lang = cli_lang.or(auto_lang).unwrap_or("en");
+    rust_i18n::set_locale(lang);
+
+    // ── Boolean flags ─────────────────────────────────────────────────────────
     let want_blue = raw_args.iter().any(|a| a == "--i-am-blue");
     let want_rainbow = raw_args.iter().any(|a| a == "--color-me");
     let want_classic = raw_args.iter().any(|a| a == "--classic-colors");
@@ -81,26 +129,24 @@ fn main() -> anyhow::Result<()> {
     let no_eyecandy = raw_args.iter().any(|a| a == "--no-eyecandy");
     let drone = raw_args.iter().any(|a| a == "--i-drone-you");
 
-    // --delorean DD.MM.YYYY DD.MM.YYYY
-    let delorean_dates: Option<(chrono::NaiveDate, chrono::NaiveDate)> = {
-        raw_args
-            .iter()
-            .position(|a| a == "--delorean")
-            .and_then(|pos| {
-                let parse = |s: &str| chrono::NaiveDate::parse_from_str(s, "%d.%m.%Y").ok();
-                let s = raw_args.get(pos + 1)?;
-                let e = raw_args.get(pos + 2)?;
-                Some((parse(s)?, parse(e)?))
-            })
-    };
+    // --delorean DD.MM.YYYY DD.MM.YYYY — fail loudly on missing or unparseable dates so the
+    // bad args never silently leak into the positional (city/lat/lng) parsing.
+    let delorean_dates: Option<(chrono::NaiveDate, chrono::NaiveDate)> =
+        if let Some(pos) = raw_args.iter().position(|a| a == "--delorean") {
+            let parse = |s: &str| chrono::NaiveDate::parse_from_str(s, "%d.%m.%Y");
+            let s = raw_args.get(pos + 1).map(String::as_str).unwrap_or("");
+            let e = raw_args.get(pos + 2).map(String::as_str).unwrap_or("");
+            match (parse(s), parse(e)) {
+                (Ok(start), Ok(end)) => Some((start, end)),
+                _ => {
+                    eprintln!("{}", t!("errors.delorean_invalid_dates"));
+                    std::process::exit(1);
+                }
+            }
+        } else {
+            None
+        };
 
-    let units = if imperial {
-        Units::Imperial
-    } else if british {
-        Units::British
-    } else {
-        Units::Metric
-    };
     let theme = if want_blue {
         Theme::Blue
     } else if want_rainbow {
@@ -114,14 +160,27 @@ fn main() -> anyhow::Result<()> {
     };
     let chart_h: usize = if high_charts { 24 } else { 4 };
 
-    let args: Vec<String> = raw_args
-        .into_iter()
-        .filter(|a| {
-            !matches!(
+    // Strip all known flags (and their value arguments) from positional args.
+    let args: Vec<String> = {
+        let mut skip = 0i32;
+        let mut out: Vec<String> = Vec::new();
+        for a in raw_args.iter() {
+            if skip > 0 {
+                skip -= 1;
+                continue;
+            }
+            // Flags that consume following value arguments
+            if a == "--units" || a == "--lang" {
+                skip = 1;
+                continue;
+            }
+            if a == "--delorean" {
+                skip = 2;
+                continue;
+            }
+            if matches!(
                 a.as_str(),
-                "--strange-units"
-                    | "--yes-sir"
-                    | "--i-am-blue"
+                "--i-am-blue"
                     | "--color-me"
                     | "--classic-colors"
                     | "--rainforest"
@@ -132,28 +191,13 @@ fn main() -> anyhow::Result<()> {
                     | "--i-cant-afford-cga"
                     | "--no-eyecandy"
                     | "--i-drone-you"
-                    | "--delorean"
-            )
-        })
-        // drop the two date args after --delorean
-        .scan(0i32, |skip, a| {
-            if *skip > 0 {
-                *skip -= 1;
-                return Some(None);
+            ) {
+                continue;
             }
-            if delorean_dates.is_some()
-                && a.contains('.')
-                && a.len() == 10
-                && a.chars().filter(|&c| c == '.').count() == 2
-                && chrono::NaiveDate::parse_from_str(&a, "%d.%m.%Y").is_ok()
-            {
-                *skip = 0;
-                return Some(None);
-            }
-            Some(Some(a))
-        })
-        .flatten()
-        .collect();
+            out.push(a.clone());
+        }
+        out
+    };
 
     if args.len() < 2 {
         print_usage();
@@ -164,11 +208,11 @@ fn main() -> anyhow::Result<()> {
         let first = &args[1];
         if let Some(comma_pos) = first.find(',') {
             let lat: f64 = first[..comma_pos].parse().unwrap_or_else(|_| {
-                eprintln!("Error: invalid latitude in '{}'.", first);
+                eprintln!("{}", t!("errors.invalid_lat", val = first.as_str()));
                 std::process::exit(1);
             });
             let lng: f64 = first[comma_pos + 1..].parse().unwrap_or_else(|_| {
-                eprintln!("Error: invalid longitude in '{}'.", first);
+                eprintln!("{}", t!("errors.invalid_lng", val = first.as_str()));
                 std::process::exit(1);
             });
             let days = parse_days(args.get(2));
@@ -180,7 +224,7 @@ fn main() -> anyhow::Result<()> {
                 std::process::exit(1);
             }
             let lng: f64 = args[2].parse().unwrap_or_else(|_| {
-                eprintln!("Error: invalid longitude '{}'.", args[2]);
+                eprintln!("{}", t!("errors.invalid_lng_pos", val = args[2].as_str()));
                 std::process::exit(1);
             });
             let days = parse_days(args.get(3));
@@ -197,7 +241,7 @@ fn main() -> anyhow::Result<()> {
             match geocode_city(&city_name) {
                 Ok((lat, lng, city, country)) => (lat, lng, days, Some((city, country))),
                 Err(e) => {
-                    eprintln!("Error: {}", e);
+                    eprintln!("{}", t!("errors.generic", msg = e.to_string().as_str()));
                     std::process::exit(1);
                 }
             }
@@ -216,7 +260,7 @@ fn main() -> anyhow::Result<()> {
     if let Some((hist_start, hist_end)) = delorean_dates {
         let n_days = (hist_end - hist_start).num_days() + 1;
         if n_days < 1 {
-            eprintln!("Error: end date must be after start date.");
+            eprintln!("{}", t!("errors.end_before_start"));
             std::process::exit(1);
         }
 
@@ -254,16 +298,21 @@ fn main() -> anyhow::Result<()> {
                 None => String::new(),
             };
             let mode_str = if n_days <= 31 {
-                "Historical · hourly"
+                t!("location.hist_hourly")
             } else if n_days <= 365 {
-                "Historical · daily"
+                t!("location.hist_daily")
             } else {
-                "Historical · monthly"
+                t!("location.hist_monthly")
             };
             writeln!(
                 out,
-                "Location: {}{}, {}  ·  {}  ·  {}\n",
-                loc_prefix, lat_str, lng_str, range_str, mode_str
+                "{}  {}{}, {}  ·  {}  ·  {}\n",
+                t!("location.prefix"),
+                loc_prefix,
+                lat_str,
+                lng_str,
+                range_str,
+                mode_str
             )?;
         }
 
@@ -271,7 +320,7 @@ fn main() -> anyhow::Result<()> {
             let (url, data) = fetch_historical_hourly(lat, lng, hist_start, hist_end)?;
 
             if tabular_bells {
-                let (t, w, r, p) = (
+                let (t_lbl, w_lbl, r_lbl, p_lbl) = (
                     units.temp_label(),
                     units.wind_label(),
                     units.rain_label(),
@@ -279,7 +328,7 @@ fn main() -> anyhow::Result<()> {
                 );
                 writeln!(
                     out,
-                    "time,temp_{t},feel_{t},cloud_pct,precip_{r},wind_{w},gust_{w},pressure_{p},humidity_pct"
+                    "time,temp_{t_lbl},feel_{t_lbl},cloud_pct,precip_{r_lbl},wind_{w_lbl},gust_{w_lbl},pressure_{p_lbl},humidity_pct"
                 )?;
                 for h in &data {
                     let temp = if units.use_fahrenheit() {
@@ -366,10 +415,11 @@ fn main() -> anyhow::Result<()> {
 
             if n_days <= 365 {
                 if tabular_bells {
-                    let (t, w, r) = (units.temp_label(), units.wind_label(), units.rain_label());
+                    let (t_lbl, w_lbl, r_lbl) =
+                        (units.temp_label(), units.wind_label(), units.rain_label());
                     writeln!(
                         out,
-                        "date,tmax_{t},tmin_{t},precip_{r},wind_max_{w},gust_max_{w}"
+                        "date,tmax_{t_lbl},tmin_{t_lbl},precip_{r_lbl},wind_max_{w_lbl},gust_max_{w_lbl}"
                     )?;
                     for d in &daily {
                         let tmax = if units.use_fahrenheit() {
@@ -416,10 +466,11 @@ fn main() -> anyhow::Result<()> {
             } else {
                 let monthly = aggregate_monthly(&daily);
                 if tabular_bells {
-                    let (t, w, r) = (units.temp_label(), units.wind_label(), units.rain_label());
+                    let (t_lbl, w_lbl, r_lbl) =
+                        (units.temp_label(), units.wind_label(), units.rain_label());
                     writeln!(
                         out,
-                        "month,avg_tmax_{t},avg_tmin_{t},precip_sum_{r},wind_max_{w},gust_max_{w}"
+                        "month,avg_tmax_{t_lbl},avg_tmin_{t_lbl},precip_sum_{r_lbl},wind_max_{w_lbl},gust_max_{w_lbl}"
                     )?;
                     for m in &monthly {
                         let tmax = if units.use_fahrenheit() {
@@ -488,13 +539,14 @@ fn main() -> anyhow::Result<()> {
         }
 
         if tabular_bells {
-            let (t, w, r) = (units.temp_label(), units.wind_label(), units.rain_label());
+            let (t_lbl, w_lbl, r_lbl) =
+                (units.temp_label(), units.wind_label(), units.rain_label());
             writeln!(
                 out,
-                "time,temp_{t},feel_{t},precip_prob_pct,precip_{r},\
-                wind10m_{w},wind80m_{w},wind120m_{w},wind180m_{w},\
+                "time,temp_{t_lbl},feel_{t_lbl},precip_prob_pct,precip_{r_lbl},\
+                wind10m_{w_lbl},wind80m_{w_lbl},wind120m_{w_lbl},wind180m_{w_lbl},\
                 dir10m_deg,dir80m_deg,dir120m_deg,dir180m_deg,\
-                gust10m_{w},uv_index"
+                gust10m_{w_lbl},uv_index"
             )?;
             for h in &drone_data {
                 let temp = if units.use_fahrenheit() {
@@ -586,18 +638,22 @@ fn main() -> anyhow::Result<()> {
                 format!("{:.2}°W", lng.abs())
             };
             let days_str = if day_from > 1 {
-                format!("days {day_from}–{day_to}")
+                t!(
+                    "location.days_range",
+                    from = day_from.to_string().as_str(),
+                    to = day_to.to_string().as_str()
+                )
+                .to_string()
             } else if day_to == 1 {
-                "1 day".to_string()
+                t!("location.day_1").to_string()
             } else {
-                format!("{day_to} days")
+                t!("location.days_fmt_n", n = day_to.to_string().as_str()).to_string()
             };
-            let date_str = format!(
-                "{} {}, {}",
-                forecast_date.format("%B"),
-                forecast_date.day(),
-                forecast_date.year()
-            );
+            let chrono_loc = locale::chrono_locale(lang);
+            let date_fmt = t!("location.date_full");
+            let date_str = forecast_date
+                .format_localized(date_fmt.as_ref(), chrono_loc)
+                .to_string();
             let loc_prefix = match &location {
                 Some((city, country)) if !country.is_empty() => {
                     format!("{}, {}  ·  ", city, country)
@@ -607,8 +663,14 @@ fn main() -> anyhow::Result<()> {
             };
             writeln!(
                 out,
-                "Location: {}{}, {}  ·  {}  ·  {}  ·  Drone profile\n",
-                loc_prefix, lat_str, lng_str, days_str, date_str
+                "{}  {}{}, {}  ·  {}  ·  {}  ·  {}\n",
+                t!("location.prefix"),
+                loc_prefix,
+                lat_str,
+                lng_str,
+                days_str,
+                date_str,
+                t!("location.drone_profile")
             )?;
         }
 
@@ -635,28 +697,26 @@ fn main() -> anyhow::Result<()> {
         if !no_eyecandy {
             let dim = if mono { "" } else { "\x1b[90m" };
             let reset = if mono { "" } else { "\x1b[0m" };
+            let mods = t!("usage.modifiers_title");
+            let indent = " ".repeat(mods.chars().count() + 1);
             writeln!(out)?;
             write!(out, "{dim}")?;
-            writeln!(
-                out,
-                "Data source: Open-Meteo (open-meteo.com) — free, open-source weather API"
-            )?;
-            writeln!(out, "API URL:     {api_url}")?;
+            writeln!(out, "{}", t!("footer.data_source"))?;
+            writeln!(out, "{} {api_url}", t!("footer.api_url_label"))?;
             writeln!(out)?;
+            writeln!(out, "{} --i-drone-you  --delorean  --units  --lang", mods)?;
             writeln!(
                 out,
-                "Modifiers: --i-drone-you  --delorean  --strange-units  --yes-sir"
+                "{}--i-am-blue  --color-me  --classic-colors  --rainforest  --i-cant-afford-cga",
+                indent
             )?;
             writeln!(
                 out,
-                "           --i-am-blue  --color-me  --classic-colors  --rainforest  --i-cant-afford-cga"
-            )?;
-            writeln!(
-                out,
-                "           --no-eyecandy  --high-charts  --no-charts  --no-table  --tabular-bells"
+                "{}--no-eyecandy  --high-charts  --no-charts  --no-table  --tabular-bells",
+                indent
             )?;
             writeln!(out)?;
-            writeln!(out, "https://github.com/akurczyk/pogoda  v{VERSION}")?;
+            writeln!(out, "{}  v{VERSION}", t!("footer.github"))?;
             write!(out, "{reset}")?;
         }
     } else {
@@ -672,7 +732,7 @@ fn main() -> anyhow::Result<()> {
 
         // CSV mode: skip all visual output
         if tabular_bells {
-            let (t, w, r, p) = (
+            let (t_lbl, w_lbl, r_lbl, p_lbl) = (
                 units.temp_label(),
                 units.wind_label(),
                 units.rain_label(),
@@ -680,7 +740,7 @@ fn main() -> anyhow::Result<()> {
             );
             writeln!(
                 out,
-                "time,temp_{t},feel_{t},cloud_pct,precip_prob_pct,precip_{r},wind_{w},gust_{w},pressure_{p},humidity_pct"
+                "time,temp_{t_lbl},feel_{t_lbl},cloud_pct,precip_prob_pct,precip_{r_lbl},wind_{w_lbl},gust_{w_lbl},pressure_{p_lbl},humidity_pct"
             )?;
             for h in &data {
                 let temp = if units.use_fahrenheit() {
@@ -755,18 +815,22 @@ fn main() -> anyhow::Result<()> {
                 format!("{:.2}°W", lng.abs())
             };
             let days_str = if day_from > 1 {
-                format!("days {day_from}–{day_to}")
+                t!(
+                    "location.days_range",
+                    from = day_from.to_string().as_str(),
+                    to = day_to.to_string().as_str()
+                )
+                .to_string()
             } else if day_to == 1 {
-                "1 day".to_string()
+                t!("location.day_1").to_string()
             } else {
-                format!("{day_to} days")
+                t!("location.days_fmt_n", n = day_to.to_string().as_str()).to_string()
             };
-            let date_str = format!(
-                "{} {}, {}",
-                forecast_date.format("%B"),
-                forecast_date.day(),
-                forecast_date.year()
-            );
+            let chrono_loc = locale::chrono_locale(lang);
+            let date_fmt = t!("location.date_full");
+            let date_str = forecast_date
+                .format_localized(date_fmt.as_ref(), chrono_loc)
+                .to_string();
             let loc_prefix = match &location {
                 Some((city, country)) if !country.is_empty() => {
                     format!("{}, {}  ·  ", city, country)
@@ -776,8 +840,13 @@ fn main() -> anyhow::Result<()> {
             };
             writeln!(
                 out,
-                "Location: {}{}, {}  ·  {}  ·  {}\n",
-                loc_prefix, lat_str, lng_str, days_str, date_str
+                "{}  {}{}, {}  ·  {}  ·  {}\n",
+                t!("location.prefix"),
+                loc_prefix,
+                lat_str,
+                lng_str,
+                days_str,
+                date_str
             )?;
         }
 
@@ -801,28 +870,26 @@ fn main() -> anyhow::Result<()> {
         if !no_eyecandy {
             let dim = if mono { "" } else { "\x1b[90m" };
             let reset = if mono { "" } else { "\x1b[0m" };
+            let mods = t!("usage.modifiers_title");
+            let indent = " ".repeat(mods.chars().count() + 1);
             writeln!(out)?;
             write!(out, "{dim}")?;
-            writeln!(
-                out,
-                "Data source: Open-Meteo (open-meteo.com) — free, open-source weather API"
-            )?;
-            writeln!(out, "API URL:     {api_url}")?;
+            writeln!(out, "{}", t!("footer.data_source"))?;
+            writeln!(out, "{} {api_url}", t!("footer.api_url_label"))?;
             writeln!(out)?;
+            writeln!(out, "{} --i-drone-you  --delorean  --units  --lang", mods)?;
             writeln!(
                 out,
-                "Modifiers: --i-drone-you  --delorean  --strange-units  --yes-sir"
+                "{}--i-am-blue  --color-me  --classic-colors  --rainforest  --i-cant-afford-cga",
+                indent
             )?;
             writeln!(
                 out,
-                "           --i-am-blue  --color-me  --classic-colors  --rainforest  --i-cant-afford-cga"
-            )?;
-            writeln!(
-                out,
-                "           --no-eyecandy  --high-charts  --no-charts  --no-table  --tabular-bells"
+                "{}--no-eyecandy  --high-charts  --no-charts  --no-table  --tabular-bells",
+                indent
             )?;
             writeln!(out)?;
-            writeln!(out, "https://github.com/akurczyk/pogoda  v{VERSION}")?;
+            writeln!(out, "{}  v{VERSION}", t!("footer.github"))?;
             write!(out, "{reset}")?;
         }
     }

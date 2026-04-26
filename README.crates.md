@@ -1,6 +1,6 @@
 # Pogoda
 
-**Terminal Weather Forecast** — v0.10
+**Terminal Weather Forecast** — v0.11
 
 Pogoda is a Rust CLI that fetches hourly forecasts from [Open-Meteo](https://open-meteo.com) and renders a rich, color-coded report directly in your terminal. It shows area charts for the full forecast period and an hourly table with bars, all scaled to your terminal width. **A dedicated drone pilot mode** (`--i-drone-you`) shows wind at multiple altitudes, rain intensity, and UV index. **Historical data going back decades** is available via `--delorean`, with automatic hourly/daily/monthly rendering based on the date range.
 
@@ -41,12 +41,14 @@ pogoda <city> [days]
 
 ## Modifiers
 
+Pogoda auto-detects your unit system and UI language from the OS locale; the flags below override those defaults.
+
 | Flag | Description |
 |------|-------------|
 | `--i-drone-you` | Drone pilot profile: wind at 10/80/120/180 m, rain intensity, UV index |
 | `--delorean D1 D2` | Historical data from D1 to D2 (DD.MM.YYYY); auto-selects hourly/daily/monthly |
-| `--strange-units` | American units: °F, mph, in, inHg |
-| `--yes-sir` | British units: °C, mph, mm, hPa |
+| `--units metric\|imperial\|british` | Force unit system (default: auto from OS locale) |
+| `--lang <code>` | Force UI language: `en`, `de`, `es-es`, `es-419`, `fr-fr`, `fr-ca`, `it`, `pt-br`, `pt-pt`, `nl`, `pl`, `cs`, `sk`, `hu`, `ro`, `hr`, `sv`, `da`, `nb`, `fi`, `tr`, `el`, `ru`, `uk`, `ca` (default: auto from OS locale) |
 | `--i-am-blue` | Cool color palette (cyan → blue → indigo) |
 | `--color-me` | Full spectrum palette (cyan → blue → indigo → red → orange) |
 | `--classic-colors` | Classic palette (blue → cyan → green → yellow → orange → red) |
@@ -69,14 +71,21 @@ pogoda 52.52 13.41                                             # Berlin, 7 days
 pogoda 51.10,17.00 14                                          # Wrocław by coordinates, 14 days
 pogoda Wrocław                                                 # City name lookup
 pogoda Wrocław 3-7                                             # Days 3 through 7
-pogoda New York 5 --strange-units                              # American units
-pogoda London 7 --yes-sir                                      # British units
+pogoda Berlin 5-10                                             # Days 5 through 10
+pogoda New York 5 --units imperial                             # American units (also auto on US locale)
+pogoda London 7 --units british                                # British units
 pogoda Tokyo 10 --i-am-blue                                    # Cool color palette
+pogoda Berlin 7 --no-charts                                    # Table only
 pogoda Paris 3 --tabular-bells                                 # CSV output
+pogoda Wrocław 3 --lang pl                                     # Polish UI language
 pogoda Wrocław 7 --i-drone-you                                 # Drone pilot profile
+pogoda Berlin 5-10 --i-drone-you                               # Drone profile, days 5–10
+pogoda Alps 3 --i-drone-you --units imperial                   # Drone profile, American units
+pogoda Wrocław 7 --i-drone-you --tabular-bells                 # Drone CSV export
 pogoda Wrocław --delorean 01.01.2024 31.01.2024                # Historical hourly (≤31 days)
 pogoda Berlin --delorean 01.01.2020 31.12.2020                 # Historical daily (≤365 days)
 pogoda Warsaw --delorean 01.01.1980 20.09.2025 --rainforest    # Historical monthly, nature palette
+pogoda Paris --delorean 01.06.2023 30.06.2023 --tabular-bells  # Historical CSV export
 ```
 
 ---
